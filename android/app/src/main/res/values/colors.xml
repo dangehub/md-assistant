@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary color matching Flutter app theme -->
+    <color name="primary_color">#3B82F6</color> <!-- Blue - matches Flutter app -->
+    <color name="primary_dark">#2563EB</color> <!-- Darker blue -->
+    <color name="accent_color">#3B82F6</color> <!-- Blue accent -->
+</resources>

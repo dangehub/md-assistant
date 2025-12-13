@@ -1,0 +1,1 @@
+/Users/kirill/Projects/obsiditasks/build/app/intermediates/cxx/RelWithDebInfo/5v1u473y/obj/x86_64

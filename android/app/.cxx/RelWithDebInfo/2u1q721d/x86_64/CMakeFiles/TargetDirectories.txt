@@ -1,0 +1,2 @@
+/Users/kirill/Projects/obsiditasks/android/app/.cxx/RelWithDebInfo/2u1q721d/x86_64/CMakeFiles/edit_cache.dir
+/Users/kirill/Projects/obsiditasks/android/app/.cxx/RelWithDebInfo/2u1q721d/x86_64/CMakeFiles/rebuild_cache.dir

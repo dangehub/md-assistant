@@ -1,0 +1,2 @@
+/Users/kirill/Projects/obsiditasks/android/app/.cxx/Debug/1s1su71j/armeabi-v7a/CMakeFiles/edit_cache.dir
+/Users/kirill/Projects/obsiditasks/android/app/.cxx/Debug/1s1su71j/armeabi-v7a/CMakeFiles/rebuild_cache.dir

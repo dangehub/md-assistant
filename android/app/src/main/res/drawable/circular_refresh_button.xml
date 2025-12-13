@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Circular background -->
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="@color/primary_color" />
+            <size
+                android:width="32dp"
+                android:height="32dp" />
+        </shape>
+    </item>
+
+    <!-- Refresh icon - simplified Material Design refresh icon -->
+    <item
+        android:gravity="center"
+        android:width="18dp"
+        android:height="18dp">
+        <vector
+            android:width="18dp"
+            android:height="18dp"
+            android:viewportWidth="960"
+            android:viewportHeight="960"
+            android:tint="@android:color/white">
+            <path
+                android:fillColor="@android:color/white"
+                android:pathData="M480,840q-134,0 -227,-93t-93,-227q0,-134 93,-227t227,-93q69,0 132,28.5T720,300v-100h80v240H560v-80h110q-41,-56 -97,-88t-123,-32q-100,0 -170,70t-70,170q0,100 70,170t170,70q77,0 139,-44t87,-116h84q-28,106 -114,173T480,840Z"/>
+        </vector>
+    </item>
+</layer-list>

@@ -1,0 +1,57 @@
+name: obsi
+description: VaultMate - task manager for Obsidian vault.
+publish_to: none
+version: 1.6.0+101
+environment:
+  sdk: '>=3.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+   sdk: flutter
+  filesystem_picker: ^4.1.0
+  external_path: ^2.2.0
+  flutter_bloc: ^9.0.0
+  bloc: ^9.0.0
+  shared_preferences: ^2.2.2
+  provider: ^6.1.2
+  permission_handler: ^12.0.1
+  tuple: ^2.0.2
+  intl: ^0.20.2
+  path: ^1.9.0
+  flutter_datetime_picker_plus: ^2.2.0
+  calendar_date_picker2: ^2.0.1
+  logger: ^2.2.0
+  file_picker: ^10.2.0
+  flutter_local_notifications: ^19.2.1
+  timezone: ^0.10.0
+  url_launcher: ^6.3.1
+  #experiments with gpt
+  openai_dart: ^0.4.0
+  flutter_gemini: ^3.0.0
+  google_generative_ai: ^0.4.6
+  flutter_chat_ui: ^1.6.15
+  bubble: ^1.2.1
+  #end experiments
+  package_info_plus: ^8.3.1
+  crypto: ^3.0.6
+  home_widget: ^0.8.0
+  introduction_screen: ^3.1.17
+  in_app_purchase: ^3.2.3
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  mockito: ^5.4.4
+  flutter_launcher_icons: ^0.14.4
+flutter:
+  uses-material-design: true
+  generate: true
+  assets:
+    - assets/images/
+flutter_launcher_icons:
+  android: true
+  adaptive_icon_background: #6640C1
+  ios: true
+  remove_alpha_ios: true
+  image_path: "assets/images/icon.png"
