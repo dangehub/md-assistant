@@ -385,6 +385,30 @@ Task with date only.''';
         expect(result.scheduledTime, isFalse);
       });
 
+      test('should parse scheduled date with ISO time (no seconds)', () {
+        const content = '''---
+status: open
+priority: normal
+scheduled: 2025-12-01T05:15
+dateCreated: 2025-08-16T22:33:28.696+02:00
+dateModified: 2025-08-16T22:33:28.696+02:00
+tags:
+  - task
+---
+
+Task with ISO date and time.''';
+
+        final result = parser.parseTaskNote('test.md', content);
+        expect(result, isNotNull);
+        expect(result!.scheduled, isNotNull);
+        expect(result.scheduled!.year, equals(2025));
+        expect(result.scheduled!.month, equals(12));
+        expect(result.scheduled!.day, equals(1));
+        expect(result.scheduled!.hour, equals(5));
+        expect(result.scheduled!.minute, equals(15));
+        expect(result.scheduledTime, isTrue);
+      });
+
       test('should parse scheduled date with time', () {
         const content = '''---
 status: open

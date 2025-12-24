@@ -63,6 +63,14 @@ class TaskNoteParser extends Parser {
   /// Returns a Map with 'dateTime' and 'hasTime' keys
   /// Supports both date-only (2025-11-03) and date-with-time (2025-11-03N19:00:00) formats
   Map<String, dynamic> _parseScheduledDate(String yamlContent) {
+    final scheduledIsoMatch =
+        RegExp(r'^scheduled:\s+(\d{4}-\d{2}-\d{2}T[^\s]+)', multiLine: true)
+            .firstMatch(yamlContent);
+    if (scheduledIsoMatch != null) {
+      final dateTime = DateTime.tryParse(scheduledIsoMatch.group(1)!);
+      return {'dateTime': dateTime, 'hasTime': dateTime != null};
+    }
+
     // Try to match date with time first: 2025-11-03N19:00:00
     final scheduledWithTimeMatch = RegExp(
             r'^scheduled:\s+(\d{4}-\d{2}-\d{2})N(\d{2}:\d{2}:\d{2})',
