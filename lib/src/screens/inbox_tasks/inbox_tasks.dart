@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:obsi/src/core/tasks/task_manager.dart';
-import 'package:obsi/src/screens/inbox_tasks/calendar_view.dart';
+import 'package:obsi/src/screens/calendar/calendar_screen.dart'; // Import CalendarWidget
 import 'package:obsi/src/screens/inbox_tasks/file_view.dart';
 import 'package:obsi/src/screens/inbox_tasks/main_messages.dart';
 import 'package:obsi/src/screens/settings/settings_controller.dart';
 import 'package:obsi/src/core/tasks/task.dart';
 import 'package:obsi/src/screens/settings/settings_service.dart';
-import 'package:obsi/src/screens/subscription/subscription_screen.dart';
 import 'package:obsi/main_navigator.dart';
 import 'package:obsi/src/screens/task_editor/cubit/task_editor_cubit.dart';
 import 'package:obsi/src/screens/task_editor/task_editor.dart';
@@ -41,7 +40,16 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
 
     return Scaffold(
         appBar: _showAppBar(context),
-        floatingActionButton: _showActionButton(context),
+        floatingActionButton: BlocBuilder<InboxTasksCubit, InboxTasksState>(
+          bloc: _inboxTaskCubit,
+          builder: (context, state) {
+            // Hide parent FAB if in Calendar View (it has its own)
+            if (_inboxTaskCubit.viewMode == ViewMode.calendar) {
+              return const SizedBox.shrink();
+            }
+            return _showActionButton(context);
+          },
+        ),
         body: Column(
           children: [
             _buildFilterBar(context),
@@ -49,6 +57,15 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
               child: BlocBuilder<InboxTasksCubit, InboxTasksState>(
                   bloc: _inboxTaskCubit,
                   builder: (context, state) {
+                    if (_inboxTaskCubit.viewMode == ViewMode.calendar) {
+                      final tasks =
+                          state is InboxTasksList ? state.tasks : <Task>[];
+                      return CalendarWidget(
+                        taskManager: _inboxTaskCubit.taskManager,
+                        tasks: tasks,
+                      );
+                    }
+
                     if (state is InboxTasksList) {
                       return _showListView(
                           context, state.tasks, _inboxTaskCubit.searchQuery);
@@ -391,152 +408,12 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
 
   List<Card> _createViewItems(
       BuildContext context, List<Task> tasks, String highlightedText) {
-    switch (_inboxTaskCubit.viewMode) {
-      case ViewMode.calendar:
-        return _createCalendarViews(tasks, context, highlightedText);
-      case ViewMode.grouped:
-        return _createFileViews(tasks, context, highlightedText);
-      default:
-        return tasks.map((task) {
-          return _createTaskCard(context, task, highlightedText);
-        }).toList();
+    if (_inboxTaskCubit.viewMode == ViewMode.grouped) {
+      return _createFileViews(tasks, context, highlightedText);
     }
-  }
-
-  List<Card> _createCalendarViews(
-      List<Task> tasks, BuildContext context, String highlightedText) {
-    List<Card> calendarViews = [];
-    List<TaskCard> calendarTasks = [];
-
-    tasks.sort((a, b) {
-      if (a.scheduled == null && b.scheduled == null) return 0;
-      if (a.scheduled == null) return 1;
-      if (b.scheduled == null) return -1;
-      return a.scheduled!.compareTo(b.scheduled!);
-    });
-
-    int i = 0;
-    bool hitPremiumLimit = false;
-    for (var task in tasks) {
-      if (!SettingsController.getInstance().hasActiveSubscription && i > 10) {
-        calendarViews.add(_createPremiumUpgradeCalendarView(
-            context, tasks.length - i, highlightedText));
-        hitPremiumLimit = true;
-        break;
-      }
-
-      if ((calendarTasks.isNotEmpty &&
-              TaskManager.sameDate(
-                  calendarTasks[0].task.scheduled, task.scheduled) &&
-              task.scheduled != null) ||
-          calendarTasks.isNotEmpty &&
-              task.scheduled == null &&
-              calendarTasks[0].task.scheduled == null) {
-        calendarTasks.add(_createTaskCard(context, task, highlightedText));
-      } else {
-        if (calendarTasks.isNotEmpty) {
-          calendarViews.add(CalendarView(
-            List<TaskCard>.from(calendarTasks),
-            highlightedText: highlightedText,
-          ));
-        }
-        calendarTasks = [_createTaskCard(context, task, highlightedText)];
-      }
-      i++;
-    }
-
-    if (calendarTasks.isNotEmpty && !hitPremiumLimit) {
-      calendarViews.add(CalendarView(
-        calendarTasks,
-        highlightedText: highlightedText,
-      ));
-    }
-
-    return calendarViews;
-  }
-
-  Card _createPremiumUpgradeCalendarView(
-      BuildContext context, int hiddenTasksCount, String highlightedText) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      elevation: 2,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          gradient: LinearGradient(
-            colors: [
-              Colors.amber.withOpacity(0.1),
-              Colors.orange.withOpacity(0.1),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          border: Border.all(
-            color: Colors.amber.withOpacity(0.3),
-            width: 1,
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.star,
-                  color: Colors.amber,
-                  size: 24,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Upgrade to Premium',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.amber[700],
-                        ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'You have $hiddenTasksCount more ${hiddenTasksCount == 1 ? 'task' : 'tasks'}. Upgrade to Premium to see all your tasks without limits.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withOpacity(0.8),
-                  ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => SubscriptionScreen(
-                        settingsController: SettingsController.getInstance(),
-                      ),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.upgrade),
-                label: const Text('Upgrade Now'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.amber,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return tasks.map((task) {
+      return _createTaskCard(context, task, highlightedText);
+    }).toList();
   }
 
   List<FileView> _createFileViews(
