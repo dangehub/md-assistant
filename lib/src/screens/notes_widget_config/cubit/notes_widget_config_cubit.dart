@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -59,7 +58,6 @@ class NotesWidgetConfigCubit extends Cubit<NotesWidgetConfigState> {
     try {
       final settings = SettingsController.getInstance();
       final vaultDir = settings.vaultDirectory;
-      final vaultName = settings.vaultName;
       if (vaultDir == null || vaultDir.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -70,15 +68,13 @@ class NotesWidgetConfigCubit extends Cubit<NotesWidgetConfigState> {
         return;
       }
 
-      final trimmedVaultName = (vaultName ?? '').trim();
-      if (trimmedVaultName.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'Vault name is not configured. Please configure vault in settings first.'),
-          ),
-        );
-        return;
+      // vaultName is optional for Memos widget (only needed for Obsidian URI)
+      // Try to get it, but don't fail if it's not set
+      String vaultName = '';
+      try {
+        vaultName = settings.vaultName;
+      } catch (e) {
+        // vaultName not set, use empty string
       }
 
       final parts = notesRaw
@@ -93,11 +89,13 @@ class NotesWidgetConfigCubit extends Cubit<NotesWidgetConfigState> {
       final notesJson = jsonEncode(notesObjects);
 
       await NotesWidgetConfigCubit.updateWidgetData(notesJson);
+      // Also save vault info so Android can read it
+      await NotesWidgetConfigCubit.updateWidgetWithVaultInfo();
 
       if (state is NotesWidgetConfigLoaded) {
         emit((state as NotesWidgetConfigLoaded).copyWith(
           vaultDirectory: vaultDir,
-          vaultName: trimmedVaultName,
+          vaultName: vaultName,
           notes: parts,
         ));
       }
@@ -115,11 +113,22 @@ class NotesWidgetConfigCubit extends Cubit<NotesWidgetConfigState> {
   }
 
   static Future<void> updateWidgetWithVaultInfo() async {
-    await HomeWidget.saveWidgetData<String>(
-        _vaultKey, SettingsController.getInstance().vaultName);
+    final settings = SettingsController.getInstance();
+    final vaultDir = settings.vaultDirectory;
 
-    await HomeWidget.saveWidgetData<String>(
-        _vaultDirKey, SettingsController.getInstance().vaultDirectory);
+    // Try to get vaultName, fallback to extracting from path
+    String? vaultName;
+    try {
+      vaultName = settings.vaultName;
+    } catch (e) {
+      // If vaultName fails, extract from directory path
+      if (vaultDir != null) {
+        vaultName = vaultDir.split('/').last.split('\\').last;
+      }
+    }
+
+    await HomeWidget.saveWidgetData<String>(_vaultKey, vaultName);
+    await HomeWidget.saveWidgetData<String>(_vaultDirKey, vaultDir);
 
     await HomeWidget.updateWidget(
       name: 'NotesWidgetReceiver',

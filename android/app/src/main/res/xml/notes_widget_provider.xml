@@ -6,4 +6,4 @@
     android:widgetCategory="home_screen"
     android:minWidth="170dp"
     android:minHeight="110dp"
-    android:label="Obsi Notes" />
+    android:label="VaultMate Memos" />

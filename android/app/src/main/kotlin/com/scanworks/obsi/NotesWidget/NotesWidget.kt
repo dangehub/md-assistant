@@ -119,59 +119,118 @@ class NotesWidget : GlanceAppWidget() {
             emptyList()
         }
         Log.w(TAG, "Notes: $notes")
-        WidgetContent(context, notes, vaultName)
+        
+        // For memos widget, we focus on the first note and parse its memos
+        val memos = if (notes.isNotEmpty() && !vaultDir.isNullOrEmpty()) {
+            val firstNote = notes.first()
+            Log.d(TAG, "Reading content for: ${firstNote.fileName}")
+            val content = readNoteContent(vaultDir, firstNote.fileName)
+            Log.d(TAG, "Content length: ${content?.length ?: 0}")
+            if (content != null) {
+                val parsed = parseMemos(content)
+                Log.d(TAG, "Parsed ${parsed.size} memos")
+                parsed
+            } else {
+                Log.w(TAG, "Content is null")
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
+        
+        Log.d(TAG, "Total memos to display: ${memos.size}")
+        val noteTitle = if (notes.isNotEmpty()) notes.first().displayTitle else null
+        
+        WidgetContent(context, memos, noteTitle, vaultName, vaultDir, notes.firstOrNull()?.fileName)
     }
 
     @Composable
-    private fun WidgetContent(context: Context, notes: List<NoteWrapper>, vaultName: String?) {
+    private fun WidgetContent(
+        context: Context, 
+        memos: List<MemoItem>, 
+        noteTitle: String?,
+        vaultName: String?,
+        vaultDir: String?,
+        noteFileName: String?
+    ) {
         val backgroundColor = getWidgetBackgroundColor()
         val fontColor = getFontColor()
+        val secondaryColor = GlanceTheme.colors.secondary
 
         Column(
             modifier = GlanceModifier
                 .background(backgroundColor)
                 .padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
-            buildCaption(fontColor, vaultName)
+            buildCaption(fontColor, vaultName, vaultDir, noteFileName)
 
-            if (notes.isEmpty() || vaultName.isNullOrEmpty()) {
-                // Empty / not configured state: tap anywhere to open config in Obsi
+            if (vaultDir.isNullOrEmpty() || noteFileName.isNullOrEmpty()) {
+                // Not configured state
                 Column(
                     modifier = GlanceModifier
                         .padding(top = 8.dp)
                         .clickable(actionRunCallback<OpenNotesConfigActionCallback>())
                 ) {
                     Text(
-                        text = "Tap to configure notes widget",
+                        text = "Tap to configure memos widget",
                         style = TextStyle(
                             color = fontColor,
                             fontSize = 16.sp
                         )
                     )
                 }
+            } else if (memos.isEmpty()) {
+                // No memos found
+                Column(
+                    modifier = GlanceModifier
+                        .padding(top = 8.dp)
+                ) {
+                    Text(
+                        text = "No memos today",
+                        style = TextStyle(
+                            color = fontColor,
+                            fontSize = 14.sp
+                        )
+                    )
+                    Text(
+                        text = "Tap + to add one",
+                        style = TextStyle(
+                            color = secondaryColor,
+                            fontSize = 12.sp
+                        )
+                    )
+                }
             } else {
+                // Display memos list
                 LazyColumn(
                     modifier = GlanceModifier
-                        .padding(top = 4.dp, start = 2.dp, end = 2.dp)
+                        .padding(top = 4.dp)
                 ) {
-                    items(notes.size) { index ->
-                        val note = notes[index]
-                        val params = actionParametersOf(
-                            ActionParameters.Key<String>(OpenNoteActionCallback.NOTE_FILE_NAME_KEY) to note.fileName,
-                            ActionParameters.Key<String>(OpenNoteActionCallback.NOTE_VAULT_NAME_KEY) to vaultName!!
-                        )
+                    items(memos.size) { index ->
+                        val memo = memos[index]
                         Row(
                             modifier = GlanceModifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .clickable(actionRunCallback<OpenNoteActionCallback>(params))
+                                .padding(vertical = 3.dp)
                         ) {
+                            // Time badge
                             Text(
-                                text = note.displayTitle,
+                                text = memo.time,
+                                style = TextStyle(
+                                    color = secondaryColor,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                ),
+                                modifier = GlanceModifier.padding(end = 8.dp)
+                            )
+                            // Memo content
+                            Text(
+                                text = memo.content,
                                 style = TextStyle(
                                     color = fontColor,
-                                    fontSize = 16.sp
-                                )
+                                    fontSize = 14.sp
+                                ),
+                                maxLines = 2
                             )
                         }
                     }
@@ -181,7 +240,7 @@ class NotesWidget : GlanceAppWidget() {
     }
 
     @Composable
-    private fun buildCaption(fontColor: ColorProvider, vaultName: String?) {
+    private fun buildCaption(fontColor: ColorProvider, vaultName: String?, vaultDir: String?, noteFileName: String?) {
         Row(
             modifier = GlanceModifier
                 .fillMaxWidth()
@@ -198,7 +257,7 @@ class NotesWidget : GlanceAppWidget() {
                     .clickable(configureAction)
             )
             Text(
-                text = "Notes",
+                text = "Memos",
                 modifier = GlanceModifier
                     .padding(start = 6.dp, end = 8.dp)
                     .clickable(configureAction),
@@ -209,29 +268,30 @@ class NotesWidget : GlanceAppWidget() {
                 )
             )
             Spacer(modifier = GlanceModifier.defaultWeight())
-            // Refresh button to load bookmarks from Obsidian vault
+            // Refresh button
             val refreshAction = actionRunCallback<RefreshBookmarksActionCallback>()
             Image(
                 provider = ImageProvider(resId = R.drawable.circular_refresh_button),
-                contentDescription = "Refresh bookmarks",
+                contentDescription = "Refresh",
                 modifier = GlanceModifier
                     .height(32.dp)
                     .width(32.dp)
                     .padding(end = 4.dp)
                     .clickable(refreshAction)
             )
-            // Plus button to create a new note in Obsidian
-            val plusAction = if (!vaultName.isNullOrEmpty()) {
+            // Plus button to add a new memo
+            val plusAction = if (!vaultDir.isNullOrEmpty() && !noteFileName.isNullOrEmpty()) {
                 val params = actionParametersOf(
-                    ActionParameters.Key<String>(CreateNoteActionCallback.NOTE_VAULT_NAME_KEY) to vaultName
+                    ActionParameters.Key<String>(AddMemoActionCallback.VAULT_DIR_KEY) to vaultDir,
+                    ActionParameters.Key<String>(AddMemoActionCallback.NOTE_FILE_KEY) to noteFileName
                 )
-                actionRunCallback<CreateNoteActionCallback>(params)
+                actionRunCallback<AddMemoActionCallback>(params)
             } else {
                 actionRunCallback<OpenNotesConfigActionCallback>()
             }
             Image(
                 provider = ImageProvider(resId = R.drawable.circular_add_button),
-                contentDescription = "Add note",
+                contentDescription = "Add memo",
                 modifier = GlanceModifier
                     .height(32.dp)
                     .width(32.dp)
@@ -343,6 +403,61 @@ class NotesWidget : GlanceAppWidget() {
         val accessStatus: FileAccessStatus = FileAccessStatus.OK,
         val originalPath: String = fileName
     )
+    
+    /**
+     * Represents a single memo entry parsed from the note.
+     * Format: - HH:mm(:ss)? content
+     */
+    data class MemoItem(
+        val time: String,
+        val content: String,
+        val rawLine: String
+    )
+    
+    /**
+     * Parses memo entries from note content.
+     * Memos are lines matching: - HH:mm content or - HH:mm:ss content
+     */
+    private fun parseMemos(content: String): List<MemoItem> {
+        val memoPattern = Regex("""^-\s+(\d{1,2}:\d{2}(?::\d{2})?)\s+(.+)$""", RegexOption.MULTILINE)
+        val memos = mutableListOf<MemoItem>()
+        
+        memoPattern.findAll(content).forEach { match ->
+            val time = match.groupValues[1]
+            val text = match.groupValues[2]
+            memos.add(MemoItem(time = time, content = text, rawLine = match.value))
+        }
+        
+        return memos
+    }
+    
+    /**
+     * Reads the content of a note file.
+     */
+    private fun readNoteContent(vaultDir: String?, fileName: String): String? {
+        if (vaultDir.isNullOrEmpty()) return null
+        
+        val fullPath = if (fileName.startsWith("/")) {
+            fileName
+        } else if (fileName.endsWith(".md")) {
+            "$vaultDir/$fileName"
+        } else {
+            "$vaultDir/$fileName.md"
+        }
+        
+        val file = File(fullPath)
+        return try {
+            if (file.exists() && file.canRead()) {
+                file.readText()
+            } else {
+                Log.w(TAG, "Cannot read file: $fullPath")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error reading file: $fullPath", e)
+            null
+        }
+    }
 
     companion object {
         const val NOTES_JSON_KEY = "notes_widget_notes"

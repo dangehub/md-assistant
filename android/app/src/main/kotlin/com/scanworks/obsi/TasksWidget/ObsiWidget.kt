@@ -185,7 +185,7 @@ class ObsiWidget : GlanceAppWidget() {
             val doneCount = tasks.count { it.status == "done" }
             val totalCount = tasks.size
             Text(
-                text = if (totalCount > 0) "Today tasks $doneCount/$totalCount" else "Today tasks",
+                text = if (totalCount > 0) "Tasks $doneCount/$totalCount" else "Tasks",
                 modifier = GlanceModifier
                     .padding(start = 6.dp, end = 8.dp)
                     .clickable(launchAppAction),
