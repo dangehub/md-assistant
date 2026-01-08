@@ -12,11 +12,13 @@ class FilterManagementScreen extends StatefulWidget {
 
 class _FilterManagementScreenState extends State<FilterManagementScreen> {
   late List<FilterList> _filters;
+  String? _widgetFilterId;
 
   @override
   void initState() {
     super.initState();
     _filters = List.from(SettingsController.getInstance().filters);
+    _widgetFilterId = SettingsController.getInstance().widgetFilterId;
     SettingsController.getInstance().addListener(_onSettingsChanged);
   }
 
@@ -29,38 +31,8 @@ class _FilterManagementScreenState extends State<FilterManagementScreen> {
   void _onSettingsChanged() {
     setState(() {
       _filters = List.from(SettingsController.getInstance().filters);
+      _widgetFilterId = SettingsController.getInstance().widgetFilterId;
     });
-  }
-
-  void _onReorder(int oldIndex, int newIndex) {
-    setState(() {
-      if (oldIndex < newIndex) {
-        newIndex -= 1;
-      }
-      final item = _filters.removeAt(oldIndex);
-      _filters.insert(newIndex, item);
-    });
-    // Update controller immediately (or save on exit? Updating immediately is better UX for sync)
-    // But reorder logic in controller handles indices slightly differently potentially or needs to be matched.
-    // The controller's reorderFilters handles the index adjustment.
-    // However, since we just mutated local state, we should pass original indices.
-    // Wait, if I mutated local state, then calling controller might double mutate if I reload?
-    // Let's call controller and let it update us via listener.
-    // But reorderable list view expects local state update to prevent UI jump.
-    // So:
-    // 1. Update local state (done above).
-    // 2. Call controller.
-
-    // Actually, calling controller which notifies listener might cause a full rebuild that overrides local state anyway.
-    // Let's try calling controller directly.
-    SettingsController.getInstance().reorderFilters(
-        oldIndex, newIndex < oldIndex ? newIndex : newIndex + 1);
-    // Note: ReorderableListView passes newIndex such that if dragging downwards, newIndex is index+1 of target.
-    // Controller logic: if (oldIndex < newIndex) newIndex -= 1;
-    // So if I pass raw indices to controller, it should match.
-    // Revert local change and trust controller?
-    // ReorderableListView requires immediate visual feedback.
-    // Let's trust logic.
   }
 
   Future<void> _editFilter(FilterList filter) async {
@@ -110,48 +82,93 @@ class _FilterManagementScreenState extends State<FilterManagementScreen> {
     }
   }
 
+  Future<void> _selectWidgetFilter() async {
+    var selected = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return SimpleDialog(
+          title: const Text('选择小部件筛选器'),
+          children: _filters.map((f) {
+            return SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, f.id),
+              child: ListTile(
+                leading: _widgetFilterId == f.id
+                    ? const Icon(Icons.check, color: Colors.blue)
+                    : null,
+                title: Text(f.name),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+
+    if (selected != null) {
+      await SettingsController.getInstance().updateWidgetFilterId(selected);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    String widgetFilterName = "默认 (Default)";
+    try {
+      if (_widgetFilterId != null) {
+        var f = _filters.firstWhere((element) => element.id == _widgetFilterId);
+        widgetFilterName = f.name;
+      } else {
+        var f = _filters.firstWhere((element) => element.id == 'filter_today',
+            orElse: () =>
+                _filters.isNotEmpty ? _filters.first : FilterList.recent());
+        widgetFilterName = "${f.name} (默认)";
+      }
+    } catch (e) {
+      // quiet
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('管理筛选列表'),
       ),
-      body: ReorderableListView.builder(
-        itemCount: _filters.length,
-        onReorder: (oldIndex, newIndex) {
-          // ReorderableListView passes newIndex that is 'slot' index.
-          // If dragging down, newIndex is > oldIndex.
-          // Controller logic:
-          // if (oldIndex < newIndex) newIndex -= 1;
-          // Let's match controller logic.
-          SettingsController.getInstance().reorderFilters(oldIndex, newIndex);
-        },
-        itemBuilder: (context, index) {
-          final filter = _filters[index];
-          return ListTile(
-            key: ValueKey(filter.id),
-            // leading: Text(filter.name.split(' ').firstOrNull ?? '',
-            //     style: TextStyle(fontSize: 20)), // Removed to avoid duplication
-            // Or just show Icon if it has one (migrated ones might have).
-            // But user said "Remove Icon options".
-            // Let's show name.
-            title: Text(filter.name),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.edit),
-                  onPressed: () => _editFilter(filter),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: () => _deleteFilter(filter),
-                ),
-                const Icon(Icons.drag_handle),
-              ],
+      body: Column(
+        children: [
+          ListTile(
+            title: const Text("桌面小部件显示"),
+            subtitle: Text(widgetFilterName),
+            trailing: const Icon(Icons.arrow_forward_ios),
+            onTap: _selectWidgetFilter,
+          ),
+          const Divider(),
+          Expanded(
+            child: ReorderableListView.builder(
+              itemCount: _filters.length,
+              onReorder: (oldIndex, newIndex) {
+                SettingsController.getInstance()
+                    .reorderFilters(oldIndex, newIndex);
+              },
+              itemBuilder: (context, index) {
+                final filter = _filters[index];
+                return ListTile(
+                  key: ValueKey(filter.id),
+                  title: Text(filter.name),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit),
+                        onPressed: () => _editFilter(filter),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete),
+                        onPressed: () => _deleteFilter(filter),
+                      ),
+                      const Icon(Icons.drag_handle),
+                    ],
+                  ),
+                );
+              },
             ),
-          );
-        },
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _addFilter,

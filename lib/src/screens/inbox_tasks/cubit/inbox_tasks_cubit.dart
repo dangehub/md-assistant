@@ -252,9 +252,7 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
     // Always schedule notifications for all tasks (now handling all tasks in manager)
     _scheduleNotifications(_taskManager.tasks);
     if (Platform.isAndroid) {
-      _taskManager.getTodayTasks().then((tasks) {
-        HomeWidgetHandler.updateWidget(tasks);
-      });
+      HomeWidgetHandler.updateWidget(_taskManager.tasks);
     }
 
     // Load ALL tasks

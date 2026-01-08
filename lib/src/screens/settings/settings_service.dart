@@ -364,4 +364,20 @@ class SettingsService {
     var sharedPreferences = await SharedPreferences.getInstance();
     await sharedPreferences.setStringList(_customFiltersKey, filters);
   }
+
+  static const String _widgetFilterIdKey = "widget_filter_id";
+
+  Future<String?> widgetFilterId() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getString(_widgetFilterIdKey);
+  }
+
+  Future<void> updateWidgetFilterId(String? filterId) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    if (filterId == null) {
+      sharedPreferences.remove(_widgetFilterIdKey);
+    } else {
+      sharedPreferences.setString(_widgetFilterIdKey, filterId);
+    }
+  }
 }

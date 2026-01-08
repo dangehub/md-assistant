@@ -59,79 +59,76 @@ class _NotesWidgetConfigState extends State<NotesWidgetConfig> {
               children: [
                 Expanded(
                   child: ListView(
+                    padding: const EdgeInsets.all(16),
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Notes to show on widget:',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Enter note paths or use variables like {{YYYY-MM-DD}} for dynamic dates.',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '支持的变量: {{YYYY}}, {{MM}}, {{DD}}, {{YYYY-MM-DD}} 等',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
+                      const SizedBox(height: 8),
+                      ..._noteControllers.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final controller = entry.value;
+                        return Column(
                           children: [
-                            const Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                'Notes to show on widget:',
-                                style: TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Pick notes from your vault. Only the file name without .md will be used.',
-                              style: TextStyle(fontSize: 14),
-                            ),
-                            const SizedBox(height: 8),
-                            ..._noteControllers.asMap().entries.map((entry) {
-                              final index = entry.key;
-                              final controller = entry.value;
-                              return Column(
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: TextField(
-                                          controller: controller,
-                                          readOnly: true,
-                                          decoration: const InputDecoration(
-                                            border: OutlineInputBorder(),
-                                            hintText: 'daily-note',
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      IconButton(
-                                        icon: const Icon(Icons.folder_open),
-                                        onPressed: () {
-                                          _selectNoteFile(context, index);
-                                        },
-                                      ),
-                                      const SizedBox(width: 4),
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline),
-                                        onPressed: () {
-                                          setState(() {
-                                            _noteControllers.removeAt(index);
-                                          });
-                                        },
-                                      ),
-                                    ],
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: controller,
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      hintText: '{{YYYY-MM-DD}} or daily-note',
+                                    ),
                                   ),
-                                  const SizedBox(height: 4),
-                                  const Divider(height: 1),
-                                  const SizedBox(height: 4),
-                                ],
-                              );
-                            }).toList(),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: IconButton(
-                                icon: const Icon(Icons.add_circle_outline),
-                                onPressed: () {
-                                  setState(() {
-                                    _noteControllers
-                                        .add(TextEditingController());
-                                  });
-                                },
-                              ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: const Icon(Icons.folder_open),
+                                  tooltip: '选择文件',
+                                  onPressed: () {
+                                    _selectNoteFile(context, index);
+                                  },
+                                ),
+                                const SizedBox(width: 4),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline),
+                                  onPressed: () {
+                                    setState(() {
+                                      _noteControllers.removeAt(index);
+                                    });
+                                  },
+                                ),
+                              ],
                             ),
+                            const SizedBox(height: 4),
+                            const Divider(height: 1),
+                            const SizedBox(height: 4),
                           ],
+                        );
+                      }),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: IconButton(
+                          icon: const Icon(Icons.add_circle_outline),
+                          onPressed: () {
+                            setState(() {
+                              _noteControllers.add(TextEditingController());
+                            });
+                          },
                         ),
                       ),
                     ],

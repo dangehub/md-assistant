@@ -4,7 +4,6 @@ import 'package:obsi/src/core/notification_manager.dart';
 import 'package:obsi/src/core/storage/ios_tasks_file_storage.dart';
 import 'package:obsi/src/core/storage/storage_interfaces.dart';
 import 'package:obsi/src/core/subscription/subscription_manager.dart';
-import 'package:obsi/src/core/tasks/task_manager.dart';
 import 'dart:io';
 import 'settings_service.dart';
 import 'package:external_path/external_path.dart';
@@ -14,7 +13,6 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:convert';
 import 'package:obsi/src/core/filter_list.dart';
 import 'package:obsi/src/core/task_filter.dart';
-import 'package:uuid/uuid.dart';
 
 class SettingsController with ChangeNotifier {
   static SettingsController? _instance;
@@ -172,7 +170,16 @@ class SettingsController with ChangeNotifier {
   String? _aiBaseUrl;
   String? _aiModelName;
   String? _activeFilterId;
+  String? _widgetFilterId;
+  String? get widgetFilterId => _widgetFilterId;
   List<FilterList> _filters = [];
+
+  Future<void> updateWidgetFilterId(String? newId) async {
+    if (newId == _widgetFilterId) return;
+    _widgetFilterId = newId;
+    notifyListeners();
+    await _settingsService.updateWidgetFilterId(newId);
+  }
 
   bool _showOverdueOnly = false;
   bool _includeDueTasksInToday = true;
@@ -236,6 +243,7 @@ class SettingsController with ChangeNotifier {
     _reviewCompletedReminderTime =
         await _settingsService.reviewCompletedReminderTime();
     _activeFilterId = await _settingsService.activeFilterId();
+    _widgetFilterId = await _settingsService.widgetFilterId();
 
     var customFiltersJson = await _settingsService.customFilters();
     if (customFiltersJson.isEmpty) {

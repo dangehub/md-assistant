@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:logger/logger.dart';
+import 'package:obsi/src/core/filter_list.dart';
 import 'package:obsi/src/core/storage/android_tasks_file_storage.dart';
 import 'package:obsi/src/core/storage/changed_files_storage.dart';
 import 'package:obsi/src/core/tasks/task.dart';
@@ -32,7 +33,17 @@ class HomeWidgetHandler {
   static Future<void> updateWidget(List<Task> tasks) async {
     try {
       Logger().i("Updating widget with tasks: ${tasks.length}");
-      var jsonTasks = jsonEncode(_tasks2Json(tasks));
+
+      // Filter tasks based on widget settings
+      var settings = SettingsController
+          .getInstance(); // Assumes initialized if called from app
+      var targetFilter = _getWidgetFilter(settings);
+
+      var filteredTasks = tasks.where((t) => targetFilter.matches(t)).toList();
+      Logger().i(
+          "Filtered widget tasks: ${filteredTasks.length} using filter: ${targetFilter.name}");
+
+      var jsonTasks = jsonEncode(_tasks2Json(filteredTasks));
       await _saveAndUpdateWidget("tasks", jsonTasks);
     } catch (e) {
       Logger().e("Error updating widget: $e");
@@ -42,7 +53,7 @@ class HomeWidgetHandler {
 
   static Future _requestTasksHandler() async {
     Logger().i("HomeWidget: requesttasks received");
-    var tasks = await _getTodayTasks();
+    var tasks = await _getWidgetTasks();
     var jsonTasks = jsonEncode(tasks);
     _saveAndUpdateWidget("tasks", jsonTasks.toString());
   }
@@ -53,7 +64,7 @@ class HomeWidgetHandler {
         name: 'ObsiWidgetReceiver', iOSName: 'HomeWidget');
   }
 
-  static Future<List<Map<String, dynamic>>?> _getTodayTasks() async {
+  static Future<List<Map<String, dynamic>>?> _getWidgetTasks() async {
     List<Map<String, dynamic>> resultTask = [];
     var settings =
         SettingsController.getInstance(settingsService: SettingsService());
@@ -72,8 +83,10 @@ class HomeWidgetHandler {
       // Load tasks from the specified vault directory
       await taskManager.loadTasks(vaultDirectory,
           taskFilter: settings.globalTaskFilter);
-      //return only tasks for today
-      var tasks = await taskManager.getTodayTasks();
+
+      var targetFilter = _getWidgetFilter(settings);
+      var tasks =
+          taskManager.tasks.where((t) => targetFilter.matches(t)).toList();
       resultTask = _tasks2Json(tasks);
     } else {
       Logger().d('Vault directory is not set or empty. Using default tasks.');
@@ -82,6 +95,25 @@ class HomeWidgetHandler {
     }
 
     return resultTask;
+  }
+
+  static FilterList _getWidgetFilter(SettingsController settings) {
+    var filterId = settings.widgetFilterId;
+    if (filterId != null) {
+      try {
+        return settings.filters.firstWhere((f) => f.id == filterId);
+      } catch (e) {
+        // Fallback if ID not found
+      }
+    }
+    // Default to 'Today' if possible, or 'Recent', or first available
+    try {
+      return settings.filters.firstWhere((f) => f.id == 'filter_today');
+    } catch (e) {
+      return settings.filters.isNotEmpty
+          ? settings.filters.first
+          : FilterList.recent();
+    }
   }
 
   static List<Map<String, dynamic>> _tasks2Json(List<Task> tasks) {

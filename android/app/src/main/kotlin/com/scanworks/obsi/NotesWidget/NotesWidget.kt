@@ -110,8 +110,10 @@ class NotesWidget : GlanceAppWidget() {
 
         Log.d(TAG, "GlanceContent notesJson=$notesJson vaultName=$vaultName")
 
+        val vaultDir = prefs.getString(NOTES_VAULT_DIR_KEY, null)
+
         val notes = try {
-            parseNotes(notesJson)
+            parseNotes(notesJson, vaultDir)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse notes JSON", e)
             emptyList()
@@ -238,34 +240,95 @@ class NotesWidget : GlanceAppWidget() {
         }
     }
 
-    private fun parseNotes(notesJson: String?): List<NoteWrapper> {
+    private fun parseNotes(notesJson: String?, vaultDir: String?): List<NoteWrapper> {
         val result = mutableListOf<NoteWrapper>()
 
         if (!notesJson.isNullOrEmpty()) {
             val array = JSONArray(notesJson)
             for (i in 0 until array.length()) {
                 val element = array.get(i)
+                val rawFile: String?
+                val isBookmark: Boolean
+                
                 if (element is String) {
-                    // Legacy format: simple string path without bookmark flag
-                    val file = element
-                    val display = extractDisplayTitle(file)
-                    result.add(NoteWrapper(fileName = file, displayTitle = display, bookmark = false))
+                    rawFile = element
+                    isBookmark = false
                 } else if (element is org.json.JSONObject) {
-                    val file = element.optString("file", null)
-                    if (!file.isNullOrEmpty()) {
-                        val isBookmark = if (element.has("bookmark")) {
-                            element.optBoolean("bookmark", false)
-                        } else {
-                            false
-                        }
-                        val display = extractDisplayTitle(file)
-                        result.add(NoteWrapper(fileName = file, displayTitle = display, bookmark = isBookmark))
-                    }
+                    rawFile = element.optString("file", null)
+                    isBookmark = element.optBoolean("bookmark", false)
+                } else {
+                    continue
                 }
+                
+                if (rawFile.isNullOrEmpty()) continue
+                
+                // Resolve variables like {{YYYY-MM-DD}}
+                val resolvedFile = if (VariableResolver.hasVariables(rawFile)) {
+                    VariableResolver.resolve(rawFile)
+                } else {
+                    rawFile
+                }
+                
+                val display = extractDisplayTitle(resolvedFile)
+                
+                // Check if file is accessible
+                val accessStatus = checkFileAccess(vaultDir, resolvedFile)
+                
+                result.add(NoteWrapper(
+                    fileName = resolvedFile, 
+                    displayTitle = if (accessStatus == FileAccessStatus.OK) display else "$display ⚠️",
+                    bookmark = isBookmark,
+                    accessStatus = accessStatus,
+                    originalPath = rawFile
+                ))
             }
         }
 
         return result
+    }
+    
+    enum class FileAccessStatus {
+        OK,
+        NOT_FOUND,
+        NO_PERMISSION,
+        VAULT_NOT_SET
+    }
+    
+    private fun checkFileAccess(vaultDir: String?, fileName: String): FileAccessStatus {
+        if (vaultDir.isNullOrEmpty()) {
+            return FileAccessStatus.VAULT_NOT_SET
+        }
+        
+        val fullPath = if (fileName.startsWith("/")) {
+            fileName
+        } else {
+            "$vaultDir/$fileName.md"
+        }
+        
+        val file = File(fullPath)
+        
+        return try {
+            if (file.exists()) {
+                if (file.canRead()) {
+                    FileAccessStatus.OK
+                } else {
+                    Log.w(TAG, "No read permission for: $fullPath")
+                    FileAccessStatus.NO_PERMISSION
+                }
+            } else {
+                // Also try without .md extension for already-extensioned paths
+                val altFile = File(fullPath.removeSuffix(".md"))
+                if (altFile.exists() && altFile.canRead()) {
+                    FileAccessStatus.OK
+                } else {
+                    Log.d(TAG, "File not found: $fullPath")
+                    FileAccessStatus.NOT_FOUND
+                }
+            }
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Security exception accessing: $fullPath", e)
+            FileAccessStatus.NO_PERMISSION
+        }
     }
 
     private fun extractDisplayTitle(filePath: String): String {
@@ -273,7 +336,13 @@ class NotesWidget : GlanceAppWidget() {
         return nameWithExt.removeSuffix(".md")
     }
 
-    data class NoteWrapper(val fileName: String, val displayTitle: String, val bookmark: Boolean)
+    data class NoteWrapper(
+        val fileName: String, 
+        val displayTitle: String, 
+        val bookmark: Boolean,
+        val accessStatus: FileAccessStatus = FileAccessStatus.OK,
+        val originalPath: String = fileName
+    )
 
     companion object {
         const val NOTES_JSON_KEY = "notes_widget_notes"
