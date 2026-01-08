@@ -1,5 +1,6 @@
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
+import 'package:obsi/src/core/filename_date_extractor.dart';
 import 'package:obsi/src/core/tasks/markdown_task_markers.dart';
 import 'package:obsi/src/core/tasks/task.dart';
 import 'package:obsi/src/core/tasks/task_source.dart';
@@ -232,13 +233,25 @@ class TaskParser extends MarkdownTaskMarkers {
         textOnly, MarkdownTaskMarkers.recurringDateMarker);
     textOnly = recurranceRule.item2;
 
+    // 如果任务没有 scheduled 日期，尝试从文件名提取日期
+    DateTime? finalScheduledDateTime = scheduledDateTime;
+    if (finalScheduledDateTime == null && taskSource != null) {
+      final fileDate =
+          FilenameDateExtractor.extractDateFromPath(taskSource.fileName);
+      if (fileDate != null) {
+        finalScheduledDateTime = fileDate;
+        Logger().d(
+            'Inherited date from filename: ${taskSource.fileName} -> $fileDate');
+      }
+    }
+
     return Task(textOnly.trim(),
         status: status,
         priority: priority.item1,
         created: createdDate.item1,
         due: dueDate.item1,
         start: startDate.item1,
-        scheduled: scheduledDateTime,
+        scheduled: finalScheduledDateTime,
         scheduledTime: scheduledDateTime?.second == 1,
         done: doneDate.item1,
         cancelled: cancelledDate.item1,
