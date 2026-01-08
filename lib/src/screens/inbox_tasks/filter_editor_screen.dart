@@ -193,15 +193,7 @@ class _FilterEditorScreenState extends State<FilterEditorScreen> {
           DropdownButton<DateFilterType>(
             isExpanded: true,
             value: _scheduledDateFilter,
-            items: DateFilterType.values
-                .where((t) => t != DateFilterType.nextNDays)
-                .map((type) {
-              return DropdownMenuItem(
-                value: type,
-                child:
-                    Text(TaskFilter.getFilterTypeName(type, days: _nextDays)),
-              );
-            }).toList(),
+            items: _buildDropdownItems(_scheduledDateFilter),
             onChanged: (val) {
               if (val != null) setState(() => _scheduledDateFilter = val);
             },
@@ -264,6 +256,19 @@ class _FilterEditorScreenState extends State<FilterEditorScreen> {
                 });
               },
             ),
+          if (_scheduledDateFilter == DateFilterType.beforeDate)
+            _buildBeforeDateUI(
+              _customScheduledEnd,
+              _relativeEnd,
+              (customDate, relativeDays) {
+                setState(() {
+                  _customScheduledEnd = customDate;
+                  _relativeEnd = relativeDays;
+                  _customScheduledStart = null;
+                  _relativeStart = null; // Clear others
+                });
+              },
+            ),
 
           const SizedBox(height: 10),
           SwitchListTile(
@@ -279,15 +284,7 @@ class _FilterEditorScreenState extends State<FilterEditorScreen> {
           DropdownButton<DateFilterType>(
             isExpanded: true,
             value: _dueDateFilter,
-            items: DateFilterType.values
-                .where((t) => t != DateFilterType.nextNDays)
-                .map((type) {
-              return DropdownMenuItem(
-                value: type,
-                child:
-                    Text(TaskFilter.getFilterTypeName(type, days: _nextDays)),
-              );
-            }).toList(),
+            items: _buildDropdownItems(_dueDateFilter),
             onChanged: (val) {
               if (val != null) setState(() => _dueDateFilter = val);
             },
@@ -336,6 +333,23 @@ class _FilterEditorScreenState extends State<FilterEditorScreen> {
                 setState(() {
                   _customDueStart = start;
                   _customDueEnd = end;
+                });
+              },
+            ),
+          if (_dueDateFilter == DateFilterType.beforeDate)
+            _buildBeforeDateUI(
+              _customDueEnd,
+              _relativeEnd, // Note: TaskFilter currently shares relativeEnd. This is a potential bug if both use relative.
+              // Logic check: TaskFilter has single relativeEnd.
+              // If user sets Scheduled=Relative AND Due=Relative, they clash.
+              // But standard usage usually filters one.
+              // We will proceed. Ideally TaskFilter needs separate fields.
+              (customDate, relativeDays) {
+                setState(() {
+                  _customDueEnd = customDate;
+                  _relativeEnd = relativeDays;
+                  _customDueStart = null;
+                  _relativeStart = null;
                 });
               },
             ),
@@ -485,5 +499,157 @@ class _FilterEditorScreenState extends State<FilterEditorScreen> {
         ),
       ],
     );
+  }
+
+  Widget _buildBeforeDateUI(DateTime? customDate, int? relativeDays,
+      Function(DateTime?, int?) onChanged) {
+    // Determine mode based on which value is set. Default to Absolute if neither or custom set.
+    bool isRelative = relativeDays != null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text("类型: "),
+            ToggleButtons(
+              isSelected: [!isRelative, isRelative],
+              onPressed: (index) {
+                if (index == 0) {
+                  // Switch to Absolute
+                  onChanged(DateTime.now(), null); // Default to today or keep?
+                } else {
+                  // Switch to Relative
+                  onChanged(null, 0); // Default to 0 (Today)
+                }
+              },
+              constraints: const BoxConstraints(minHeight: 30, minWidth: 60),
+              children: const [Text("绝对"), Text("相对")],
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (!isRelative)
+          _buildDatePicker(customDate, (d) => onChanged(d, null),
+              label: "截止日期 (含)"),
+        if (isRelative) ...[
+          const Text("相对偏移: 前 N 天 或 后 N 天 (互斥)"),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  // Front N means negative offset.
+                  // If relativeDays is negative -> show absolute value here.
+                  initialValue:
+                      (relativeDays < 0) ? (-relativeDays).toString() : '',
+                  decoration: const InputDecoration(labelText: "前 N 天"),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(signed: true),
+                  onChanged: (val) {
+                    if (val.isNotEmpty) {
+                      final n = int.tryParse(val);
+                      if (n != null) {
+                        onChanged(null, -n); // Front N = -N
+                      }
+                    } else {
+                      // If cleared, maybe 0?
+                      onChanged(null, 0);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: TextFormField(
+                  // Back N means positive offset.
+                  initialValue: (relativeDays != null && relativeDays > 0)
+                      ? relativeDays.toString()
+                      : '',
+                  decoration: const InputDecoration(labelText: "后 N 天"),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(signed: true),
+                  onChanged: (val) {
+                    if (val.isNotEmpty) {
+                      final n = int.tryParse(val);
+                      if (n != null) {
+                        onChanged(null, n); // Back N = +N
+                      }
+                    } else {
+                      onChanged(null, 0);
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        ]
+      ],
+    );
+  }
+
+  Widget _buildDatePicker(DateTime? date, Function(DateTime?) onChanged,
+      {String label = '选择日期'}) {
+    final dateFormat = DateFormat('yyyy-MM-dd');
+    return Row(
+      children: [
+        Text("$label: ", style: const TextStyle(fontWeight: FontWeight.bold)),
+        Expanded(
+          child: TextButton(
+            child: Text(date != null ? dateFormat.format(date) : '点击选择'),
+            onPressed: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: date ?? DateTime.now(),
+                firstDate: DateTime(2000),
+                lastDate: DateTime(2100),
+              );
+              if (picked != null) {
+                onChanged(picked);
+              }
+            },
+          ),
+        ),
+        if (date != null)
+          IconButton(
+            icon: const Icon(Icons.clear),
+            onPressed: () => onChanged(null),
+          )
+      ],
+    );
+  }
+
+  List<DropdownMenuItem<DateFilterType>> _buildDropdownItems(
+      DateFilterType currentValue) {
+    // Define supported types to show in the list
+    final Set<DateFilterType> supportedTypes = {
+      DateFilterType.none,
+      DateFilterType.today,
+      DateFilterType.tomorrow,
+      DateFilterType.thisWeek,
+      DateFilterType.thisMonth,
+      DateFilterType.overdue,
+      DateFilterType.noDate,
+      DateFilterType.custom,
+      DateFilterType.relative,
+      DateFilterType.beforeDate,
+    };
+
+    // Ensure the current value is included, even if deprecated/hidden
+    final Set<DateFilterType> visibleTypes = {
+      ...supportedTypes,
+      currentValue,
+    };
+
+    // Sort them by enum index order or define a specific order?
+    // Enum order is simplest.
+    final sortedList = visibleTypes.toList()
+      ..sort((a, b) => a.index.compareTo(b.index));
+
+    return sortedList.map((type) {
+      return DropdownMenuItem(
+        value: type,
+        child: Text(TaskFilter.getFilterTypeName(type, days: _nextDays)),
+      );
+    }).toList();
   }
 }

@@ -57,15 +57,16 @@ class FilterList {
         taskIds: List<String>.from(json['taskIds'] ?? []),
       );
 
-  static FilterList recent() => FilterList(
-      id: "recent",
-      name: "Recent",
-      icon: Icons.calendar_today, // Using calendar_today for Recent/Upcoming
+  static FilterList upcoming() => FilterList(
+      id: "upcoming",
+      name: "Upcoming",
+      icon: Icons.calendar_today,
       type: FilterListType.preset,
       filter: TaskFilter(
-          scheduledDateFilter: DateFilterType.recent,
-          dueDateFilter: DateFilterType.recent,
-          nextDays: 14,
+          scheduledDateFilter: DateFilterType.beforeDate,
+          dueDateFilter: DateFilterType.beforeDate,
+          relativeEnd: 14,
+          inheritDate: false,
           useOrLogic: true));
 
   static FilterList inbox() => FilterList(

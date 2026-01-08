@@ -30,11 +30,11 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
 
   // Filter Lists
   List<FilterList> availableFilters = [
-    FilterList.recent(),
+    FilterList.upcoming(),
     FilterList.inbox(),
     FilterList.all(),
   ];
-  FilterList currentFilterList = FilterList.recent();
+  FilterList currentFilterList = FilterList.upcoming();
 
   SortMode get sortMode => SettingsController.getInstance().sortMode;
   ViewMode get viewMode => SettingsController.getInstance().viewMode;
@@ -85,12 +85,12 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
       try {
         currentFilterList = availableFilters.firstWhere(
             (f) => f.id == savedFilterId,
-            orElse: () => FilterList.recent());
+            orElse: () => FilterList.upcoming());
       } catch (e) {
-        currentFilterList = FilterList.recent();
+        currentFilterList = FilterList.upcoming();
       }
     } else {
-      currentFilterList = FilterList.recent();
+      currentFilterList = FilterList.upcoming();
     }
   }
 
@@ -103,7 +103,7 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
       // If filter was deleted, switch to Recent
       if (currentFilterList.id != 'recent') {
         // Prevent loop if recent missing somehow
-        selectFilterList(FilterList.recent());
+        selectFilterList(FilterList.upcoming());
       }
     }
   }

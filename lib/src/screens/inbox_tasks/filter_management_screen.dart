@@ -118,7 +118,7 @@ class _FilterManagementScreenState extends State<FilterManagementScreen> {
       } else {
         var f = _filters.firstWhere((element) => element.id == 'filter_today',
             orElse: () =>
-                _filters.isNotEmpty ? _filters.first : FilterList.recent());
+                _filters.isNotEmpty ? _filters.first : FilterList.upcoming());
         widgetFilterName = "${f.name} (默认)";
       }
     } catch (e) {

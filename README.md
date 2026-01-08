@@ -34,8 +34,8 @@ MD Assistant builds upon the solid foundation of VaultMate with specific enhance
 ## 📸 Screenshots
 
 <div align="center">
-  <img src="screenshots/inbox_screen.jpg" width="200" alt="Task List" />
-  <img src="screenshots/edit_screen.jpg" width="200" alt="Task Editor" />
+  <img src="screenshots/filters.png" width="200" alt="Filters" />
+  <img src="screenshots/memos.png" width="200" alt="Task Editor" />
 </div>
 
 ---

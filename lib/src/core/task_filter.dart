@@ -14,6 +14,7 @@ enum DateFilterType {
   nextDays, // Future N Days (Deprecated)
   thisMonth, // This Month
   relative, // Relative Date Range (offsets from Today)
+  beforeDate, // Due Before X date (Inclusive)
 }
 
 enum StatusFilterType {
@@ -171,6 +172,29 @@ class TaskFilter {
         // Wait, startRange is Inclusive Midnight. taskDate < startRange => False. Correct.
         // endRange is Exclusive Midnight (Day after end). taskDate < endRange => True. Correct.
         // Wait, !taskDate.isBefore(endRange) -> taskDate >= endRange. Correct.
+        return true;
+
+      case DateFilterType.beforeDate:
+        DateTime? cutoff;
+        if (customEnd != null) {
+          cutoff = customEnd;
+        } else if (relativeEnd != null) {
+          // relativeEnd is relative to today
+          cutoff = today.add(Duration(days: relativeEnd!));
+        }
+
+        if (cutoff != null) {
+          // cutoff is inclusive. taskDate must be <= cutoff.
+          // Since dates (taskDate/cutoff) are likely at 00:00:00 (normalized to day),
+          // isAfter means strictly >. So !isAfter means <=.
+          if (taskDate.isAfter(cutoff)) return false;
+        } else {
+          // If neither is set, what to do? User might not have configured it yet.
+          // Usually assume no restriction? Or fail?
+          // Let's assume no restriction (match all) or match today?
+          // If user selects "Due Before" but sets nothing, maybe show all.
+          return true;
+        }
         return true;
 
       case DateFilterType.nextNDays:
@@ -335,7 +359,7 @@ class TaskFilter {
       case DateFilterType.noDate:
         return '无日期';
       case DateFilterType.custom:
-        return '自定义';
+        return '自定义范围';
       case DateFilterType.recent:
         return '最近';
       case DateFilterType.thisMonth:
@@ -343,6 +367,8 @@ class TaskFilter {
       case DateFilterType.relative:
         // TODO: improve description?
         return '相对日期';
+      case DateFilterType.beforeDate:
+        return '截止X日前'; // Dynamic X handled elsewhere? Or just generic name
     }
   }
 

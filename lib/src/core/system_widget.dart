@@ -112,7 +112,7 @@ class HomeWidgetHandler {
     } catch (e) {
       return settings.filters.isNotEmpty
           ? settings.filters.first
-          : FilterList.recent();
+          : FilterList.upcoming();
     }
   }
 

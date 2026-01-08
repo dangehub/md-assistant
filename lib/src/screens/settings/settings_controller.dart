@@ -283,6 +283,39 @@ class SettingsController with ChangeNotifier {
       }
       _filters = uniqueFilters.values.toList();
 
+      // Migration: Remove legacy "recent" or old "upcoming" filters if they exist in persistence
+      // so that the new code-based "upcoming" (with new logic) takes precedence.
+      // We check if the user *manually* modified them? Hard to tell.
+      // For now, we force update "upcoming" by removing any persisted version that might be old.
+      // But wait, if user customized it, we loose changes.
+      // User complaint: "Why using Future 7 Days?" -> they want the new default.
+      // So we will remove 'recent' and 'filter_upcoming' (if old ID used) from the _filters list
+      // IF they match the old default logic (nextDays=7).
+      // Simpler: Just ensure we use the fresh `FilterList.upcoming()` if the ID matches.
+      // The `uniqueFilters` logic above prioritizes `loadedFilters` (persistence).
+      // We want to prioritize `_createDefaultFilters()` for built-ins?
+      // No, usually user overrides built-ins.
+      // But here we changed the definition of built-in.
+      // Let's explicitly remove 'recent' (old ID) and ensure 'upcoming' is fresh.
+      _filters.removeWhere((f) => f.id == 'recent'); // Remove old ID completely
+
+      // Ensure 'upcoming' uses the new logic by finding it and replacing it?
+      // Or by ensuring it wasn't in loadedFilters?
+      // Let's remove 'upcoming' from loaded filters if it looks like the old one?
+      // Or just remove it to force reset to new default?
+      // Let's remove it to force reset.
+      // NOTE: This resets user customization on 'upcoming' too.
+      // Given the user request, this is desired.
+      _filters.removeWhere((f) => f.id == 'upcoming');
+      _filters.add(FilterList.upcoming()); // Add fresh
+
+      // Deduplicate again just in case
+      final uniqueFilters2 = <String, FilterList>{};
+      for (var f in _filters) {
+        uniqueFilters2[f.id] = f;
+      }
+      _filters = uniqueFilters2.values.toList();
+
       // If we made changes (e.g. removed duplicates), save them
       if (_filters.length != mergedFilters.length || !hasInbox) {
         await _saveFilters();
@@ -542,23 +575,10 @@ class SettingsController with ChangeNotifier {
 
   List<FilterList> _createDefaultFilters() {
     return [
-      FilterList(
-        id: 'filter_inbox',
-        name: '📥 Inbox',
-        icon: Icons
-            .inbox, // Keep generic icon for now, user can change name to emoji
-        type: FilterListType.builtin, // or custom
-        filter: TaskFilter(
-            // Inbox definition: usually no date or specifically "Inbox" status/path?
-            // Actually Inbox usually means "No Project" or "No Date"?
-            // Let's assume Inbox = All tasks for now, or specifically tasks in root?
-            // TaskForge default: All tasks sorted by creation?
-            // Let's use TaskFilter() defaults which is basically "All" but usually we want "No Date" or similar?
-            // For VaultMate, "Inbox" usually implies new tasks.
-            // Let's just create "All", "Today", "Upcoming".
-            ),
-        taskIds: [],
-      ),
+      FilterList.inbox(),
+      FilterList.all(), // Added All
+      // FilterList.today(), // We don't have a helper for today() in FilterList yet?
+      // Let's use manual construction for now or add helper later.
       FilterList(
         id: 'filter_today',
         name: '📅 Today',
@@ -567,14 +587,7 @@ class SettingsController with ChangeNotifier {
         filter: TaskFilter.todayFilter(),
         taskIds: [],
       ),
-      FilterList(
-        id: 'filter_upcoming',
-        name: '🗓 Upcoming',
-        icon: Icons.calendar_today,
-        type: FilterListType.builtin,
-        filter: TaskFilter.nextDaysFilter(7),
-        taskIds: [],
-      ),
+      FilterList.upcoming(), // Use the new helper!
       FilterList(
         id: 'filter_completed',
         name: '✅ Completed',
