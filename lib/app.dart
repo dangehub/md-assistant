@@ -10,6 +10,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:obsi/src/screens/task_editor/cubit/task_editor_cubit.dart';
 import 'package:obsi/src/screens/task_editor/task_editor.dart';
 import 'package:obsi/src/core/tasks/task.dart';
+import 'package:obsi/src/core/variable_resolver.dart';
 import 'package:path/path.dart' as p;
 import 'dart:convert';
 import 'main_navigator.dart' as main_screen;
@@ -80,7 +81,8 @@ class _AppState extends State<App> {
 
   void _navigateToAddTask() {
     var settings = SettingsController.getInstance();
-    var createTasksPath = p.join(settings.vaultDirectory!, settings.tasksFile);
+    var resolvedTasksFile = VariableResolver.resolve(settings.tasksFile);
+    var createTasksPath = p.join(settings.vaultDirectory!, resolvedTasksFile);
 
     _navigatorKey.currentState?.push(
       MaterialPageRoute(

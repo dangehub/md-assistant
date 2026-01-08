@@ -13,6 +13,7 @@ import 'package:obsi/src/screens/task_editor/cubit/task_editor_cubit.dart';
 import 'package:obsi/src/screens/task_editor/task_editor.dart';
 import 'package:obsi/src/widgets/task_card.dart';
 import 'package:obsi/src/screens/inbox_tasks/cubit/inbox_tasks_cubit.dart';
+import 'package:obsi/src/core/variable_resolver.dart';
 import 'package:path/path.dart' as p;
 
 class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
@@ -363,8 +364,9 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
       child: const Icon(Icons.add),
       onPressed: () {
         var settings = SettingsController.getInstance();
+        var resolvedTasksFile = VariableResolver.resolve(settings.tasksFile);
         var createTasksPath =
-            p.join(settings.vaultDirectory!, settings.tasksFile);
+            p.join(settings.vaultDirectory!, resolvedTasksFile);
 
         Navigator.push(
             context,

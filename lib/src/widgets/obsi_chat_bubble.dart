@@ -8,6 +8,7 @@ import 'package:obsi/src/screens/settings/settings_controller.dart';
 import 'package:obsi/src/screens/task_editor/cubit/task_editor_cubit.dart';
 import 'package:obsi/src/screens/task_editor/task_editor.dart';
 import 'package:obsi/src/widgets/task_card.dart';
+import 'package:obsi/src/core/variable_resolver.dart';
 import 'package:path/path.dart' as p;
 
 class ObsiChatBubble extends StatelessWidget {
@@ -153,8 +154,10 @@ class ObsiChatBubble extends StatelessWidget {
               String? createTasksPath;
               if (part.taskSource == null) {
                 var settings = SettingsController.getInstance();
+                var resolvedTasksFile =
+                    VariableResolver.resolve(settings.tasksFile);
                 createTasksPath =
-                    p.join(settings.vaultDirectory!, settings.tasksFile);
+                    p.join(settings.vaultDirectory!, resolvedTasksFile);
               }
 
               return Padding(
