@@ -13,6 +13,7 @@ import 'package:obsi/src/screens/task_editor/cubit/task_editor_cubit.dart';
 import 'package:obsi/src/screens/task_editor/task_editor.dart';
 import 'package:obsi/src/widgets/task_card.dart';
 import 'package:obsi/src/screens/inbox_tasks/cubit/inbox_tasks_cubit.dart';
+import 'package:obsi/src/core/task_filter.dart';
 import 'package:obsi/src/core/variable_resolver.dart';
 import 'package:path/path.dart' as p;
 
@@ -156,6 +157,69 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
                   _inboxTaskCubit.updateShowOverdueTasksOnly(
                       !_inboxTaskCubit.showOverdueOnly);
                 },
+              );
+            },
+          ),
+          // 日期筛选按钮
+          BlocBuilder<InboxTasksCubit, InboxTasksState>(
+            bloc: _inboxTaskCubit,
+            builder: (context, _) {
+              final hasFilter =
+                  _inboxTaskCubit.dateFilter.scheduledDateFilter !=
+                          DateFilterType.none ||
+                      _inboxTaskCubit.dateFilter.dueDateFilter !=
+                          DateFilterType.none;
+
+              return PopupMenuButton<DateFilterType>(
+                tooltip: '日期筛选',
+                icon: Icon(
+                  Icons.date_range,
+                  color:
+                      hasFilter ? Theme.of(context).colorScheme.primary : null,
+                ),
+                onSelected: (DateFilterType type) {
+                  switch (type) {
+                    case DateFilterType.none:
+                      _inboxTaskCubit.clearDateFilter();
+                      break;
+                    case DateFilterType.today:
+                      _inboxTaskCubit.filterToday();
+                      break;
+                    case DateFilterType.thisWeek:
+                      _inboxTaskCubit.filterNextDays(7);
+                      break;
+                    case DateFilterType.nextNDays:
+                      _inboxTaskCubit.filterNextDays(14);
+                      break;
+                    case DateFilterType.overdue:
+                      _inboxTaskCubit.filterOverdue();
+                      break;
+                    default:
+                      break;
+                  }
+                },
+                itemBuilder: (BuildContext context) => [
+                  const PopupMenuItem(
+                    value: DateFilterType.none,
+                    child: Text('全部任务'),
+                  ),
+                  const PopupMenuItem(
+                    value: DateFilterType.today,
+                    child: Text('今天'),
+                  ),
+                  const PopupMenuItem(
+                    value: DateFilterType.thisWeek,
+                    child: Text('未来 7 天'),
+                  ),
+                  const PopupMenuItem(
+                    value: DateFilterType.nextNDays,
+                    child: Text('未来 14 天'),
+                  ),
+                  const PopupMenuItem(
+                    value: DateFilterType.overdue,
+                    child: Text('已逾期'),
+                  ),
+                ],
               );
             },
           ),

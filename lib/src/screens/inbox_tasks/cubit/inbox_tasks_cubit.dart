@@ -7,6 +7,7 @@ import 'package:logger/logger.dart';
 import 'package:obsi/src/core/notification_manager.dart';
 import 'package:obsi/src/core/storage/storage_interfaces.dart';
 import 'package:obsi/src/core/system_widget.dart';
+import 'package:obsi/src/core/task_filter.dart';
 import 'package:obsi/src/core/tasks/task.dart';
 import 'package:obsi/src/core/tasks/task_manager.dart';
 import 'package:obsi/src/screens/settings/settings_controller.dart';
@@ -24,6 +25,10 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
   final Set<String> _excludedTags = <String>{};
   int _taskDoneCount = 0;
   int _taskCount = 0;
+
+  // 日期筛选状态
+  TaskFilter _dateFilter = TaskFilter();
+  TaskFilter get dateFilter => _dateFilter;
 
   SortMode get sortMode => SettingsController.getInstance().sortMode;
   ViewMode get viewMode => SettingsController.getInstance().viewMode;
@@ -67,7 +72,7 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
     if (_excludedTags.contains(tag)) {
       _excludedTags.remove(tag);
     }
-    
+
     if (_selectedTags.contains(tag)) {
       _selectedTags.remove(tag);
     } else {
@@ -81,7 +86,7 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
     if (_selectedTags.contains(tag)) {
       _selectedTags.remove(tag);
     }
-    
+
     if (_excludedTags.contains(tag)) {
       _excludedTags.remove(tag);
     } else {
@@ -93,6 +98,36 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
   void clearTagFilter() {
     _selectedTags.clear();
     _excludedTags.clear();
+    _applySearchFilter();
+  }
+
+  /// 更新日期筛选
+  void updateDateFilter(TaskFilter filter) {
+    _dateFilter = filter;
+    _applySearchFilter();
+  }
+
+  /// 清除日期筛选
+  void clearDateFilter() {
+    _dateFilter = TaskFilter();
+    _applySearchFilter();
+  }
+
+  /// 快捷设置：筛选未来 N 天的任务
+  void filterNextDays(int days) {
+    _dateFilter = TaskFilter.nextDaysFilter(days);
+    _applySearchFilter();
+  }
+
+  /// 快捷设置：筛选今天的任务
+  void filterToday() {
+    _dateFilter = TaskFilter.todayFilter();
+    _applySearchFilter();
+  }
+
+  /// 快捷设置：筛选逾期任务
+  void filterOverdue() {
+    _dateFilter = TaskFilter.overdueFilter();
     _applySearchFilter();
   }
 
@@ -140,13 +175,13 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
         matchesTags =
             _selectedTags.any((selectedTag) => task.tags.contains(selectedTag));
       }
-      
+
       // Apply tag exclusion filtering
       bool notExcluded = true;
       if (_excludedTags.isNotEmpty) {
         // Task must not have any of the excluded tags
-        notExcluded =
-            !_excludedTags.any((excludedTag) => task.tags.contains(excludedTag));
+        notExcluded = !_excludedTags
+            .any((excludedTag) => task.tags.contains(excludedTag));
       }
 
       if (showOverdueOnly) {
@@ -155,7 +190,10 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
         matchesQuery = matchesQuery && taskState;
       }
 
-      return matchesQuery && matchesTags && notExcluded;
+      // 应用日期筛选
+      bool matchesDateFilter = _dateFilter.matches(task);
+
+      return matchesQuery && matchesTags && notExcluded && matchesDateFilter;
     }).toList();
 
     _taskDoneCount = taskDoneCount;
