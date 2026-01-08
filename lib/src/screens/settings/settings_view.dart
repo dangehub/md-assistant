@@ -1,12 +1,10 @@
 import 'dart:io';
 
-import 'package:external_path/external_path.dart';
-import 'package:filesystem_picker/filesystem_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
+
 import 'package:intl/intl.dart';
 import 'package:obsi/src/core/utils.dart';
-import 'package:permission_handler/permission_handler.dart';
+
 import 'package:url_launcher/url_launcher.dart';
 import 'package:obsi/src/screens/subscription/subscription_screen.dart';
 
@@ -31,12 +29,18 @@ class _SettingsViewState extends State<SettingsView> {
   final _dateTemplateController = TextEditingController();
   final _tasksFileNameController = TextEditingController();
   final _globalTaskFilterController = TextEditingController();
+  final _aiBaseUrlController = TextEditingController();
+  final _aiApiKeyController = TextEditingController();
+  final _aiModelNameController = TextEditingController();
 
   @override
   void initState() {
     _dateTemplateController.text = widget.controller.dateTemplate;
     _tasksFileNameController.text = widget.controller.tasksFile;
     _globalTaskFilterController.text = widget.controller.globalTaskFilter;
+    _aiBaseUrlController.text = widget.controller.aiBaseUrl ?? "";
+    _aiApiKeyController.text = widget.controller.chatGptKey ?? "";
+    _aiModelNameController.text = widget.controller.aiModelName ?? "";
 
     _dateTemplateController.addListener(() {
       widget.controller.updateDateTemplate(_dateTemplateController.text);
@@ -59,6 +63,9 @@ class _SettingsViewState extends State<SettingsView> {
     _tasksFileNameController.dispose();
     _dateTemplateController.dispose();
     _globalTaskFilterController.dispose();
+    _aiBaseUrlController.dispose();
+    _aiApiKeyController.dispose();
+    _aiModelNameController.dispose();
     widget.controller.removeListener(_onControllerChanged);
     super.dispose();
   }
@@ -140,6 +147,55 @@ class _SettingsViewState extends State<SettingsView> {
                   },
                 )
               ])),
+          Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("AI Assistant Settings",
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 16),
+                    const Text("Base URL (e.g. https://api.openai.com/v1):"),
+                    TextField(
+                      controller: _aiBaseUrlController,
+                      enableSuggestions: false,
+                      autocorrect: false,
+                      decoration: const InputDecoration(
+                        hintText: "Enter base URL (optional)",
+                      ),
+                      onSubmitted: (value) {
+                        widget.controller.updateAiBaseUrl(value);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    const Text("API Key:"),
+                    TextField(
+                      controller: _aiApiKeyController,
+                      obscureText: true,
+                      enableSuggestions: false,
+                      autocorrect: false,
+                      decoration: const InputDecoration(
+                        hintText: "Enter API Key",
+                      ),
+                      onSubmitted: (value) {
+                        widget.controller.updateChatGptKey(value);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    const Text("Model Name (e.g. gpt-4o):"),
+                    TextField(
+                      controller: _aiModelNameController,
+                      enableSuggestions: false,
+                      autocorrect: false,
+                      decoration: const InputDecoration(
+                        hintText: "Enter model name",
+                      ),
+                      onSubmitted: (value) {
+                        widget.controller.updateAiModelName(value);
+                      },
+                    )
+                  ])),
           Padding(
               padding: const EdgeInsets.all(16),
               child: Column(children: [

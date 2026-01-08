@@ -17,6 +17,7 @@ class Task implements Comparable<Task> {
   DateTime? _start;
   DateTime? _scheduled;
   bool _scheduledTime;
+  bool _isScheduledDateInferred;
   TaskSource? taskSource;
   String? _recurrenceRule = "";
 
@@ -95,6 +96,12 @@ class Task implements Comparable<Task> {
     _scheduledTime = val;
   }
 
+  bool get isScheduledDateInferred => _isScheduledDateInferred;
+  set isScheduledDateInferred(bool val) {
+    _changed = true;
+    _isScheduledDateInferred = val;
+  }
+
   /// Parses hashtags from the description, stores them in tags array, and cleans description
   void _parseTags() {
     //   _tags.clear();
@@ -125,6 +132,7 @@ class Task implements Comparable<Task> {
     due,
     scheduled,
     scheduledTime = false,
+    bool isScheduledDateInferred = false,
     start,
     this.taskSource,
     recurranceRule,
@@ -137,6 +145,7 @@ class Task implements Comparable<Task> {
         _scheduled = scheduled,
         _start = start,
         _scheduledTime = scheduledTime,
+        _isScheduledDateInferred = isScheduledDateInferred,
         _recurrenceRule = recurranceRule {
     _parseTags();
   }
@@ -166,6 +175,7 @@ class Task implements Comparable<Task> {
         _start == other._start &&
         _scheduled == other._scheduled &&
         _scheduledTime == other._scheduledTime &&
+        _isScheduledDateInferred == other._isScheduledDateInferred &&
         //taskSource == other.taskSource &&
         _recurrenceRule == other._recurrenceRule &&
         _tagsEqual(other._tags);
@@ -193,6 +203,7 @@ class Task implements Comparable<Task> {
     _start = task._start;
     _scheduled = task._scheduled;
     _scheduledTime = task._scheduledTime;
+    _isScheduledDateInferred = task._isScheduledDateInferred;
     taskSource = task.taskSource;
     // createdDateMarker = task.createdDateMarker;
     // scheduledDateMarker = task.scheduledDateMarker;
@@ -212,6 +223,7 @@ class Task implements Comparable<Task> {
       'start': _start?.toIso8601String(),
       'scheduled': _scheduled?.toIso8601String(),
       // 'scheduledTime': _scheduledTime,
+      'isScheduledDateInferred': _isScheduledDateInferred,
       'recurrenceRule': _recurrenceRule,
       'filePath': taskSource?.fileName,
       'fileOffset': taskSource?.offset.toString(),

@@ -27,6 +27,8 @@ class SettingsService {
   static const String _zeroDateKey = "zero_date";
   static const String _rateDialogCounterKey = "rate_dialog_counter";
   static const String _chatGptKeyKey = "chatgptkey";
+  static const String _aiBaseUrlKey = "ai_base_url";
+  static const String _aiModelNameKey = "ai_model_name";
   static const String _showOverdueOnlyKey = "show_overdue_only";
   static const String _includeDueTasksInTodayKey = "include_due_tasks_in_today";
   static const String _onboardingCompleteKey = "onboarding_complete";
@@ -36,12 +38,24 @@ class SettingsService {
       "review_tasks_reminder_time";
   static const String _reviewCompletedReminderTimeKey =
       "review_completed_reminder_time";
+  static const String _activeFilterIdKey = "active_filter_id";
+  static const String _customFiltersKey = "custom_filters";
 
   Future<ThemeMode> themeMode() async => ThemeMode.system;
 
   Future<String?> chatGptKey() async {
     var sharedPreferences = await SharedPreferences.getInstance();
     return sharedPreferences.getString(_chatGptKeyKey);
+  }
+
+  Future<String?> aiBaseUrl() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getString(_aiBaseUrlKey);
+  }
+
+  Future<String?> aiModelName() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getString(_aiModelNameKey);
   }
 
   Future<String?> vaultDirectory() async {
@@ -307,5 +321,47 @@ class SettingsService {
     } else {
       sharedPreferences.setString(_chatGptKeyKey, chatGptKey);
     }
+  }
+
+  Future<void> updateAiBaseUrl(String? baseUrl) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    if (baseUrl == null) {
+      sharedPreferences.remove(_aiBaseUrlKey);
+    } else {
+      sharedPreferences.setString(_aiBaseUrlKey, baseUrl);
+    }
+  }
+
+  Future<void> updateAiModelName(String? modelName) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    if (modelName == null) {
+      sharedPreferences.remove(_aiModelNameKey);
+    } else {
+      sharedPreferences.setString(_aiModelNameKey, modelName);
+    }
+  }
+
+  Future<String?> activeFilterId() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getString(_activeFilterIdKey);
+  }
+
+  Future<void> updateActiveFilterId(String? filterId) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    if (filterId == null) {
+      sharedPreferences.remove(_activeFilterIdKey);
+    } else {
+      sharedPreferences.setString(_activeFilterIdKey, filterId);
+    }
+  }
+
+  Future<List<String>> customFilters() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getStringList(_customFiltersKey) ?? [];
+  }
+
+  Future<void> updateCustomFilters(List<String> filters) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    await sharedPreferences.setStringList(_customFiltersKey, filters);
   }
 }

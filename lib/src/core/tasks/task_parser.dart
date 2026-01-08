@@ -234,12 +234,15 @@ class TaskParser extends MarkdownTaskMarkers {
     textOnly = recurranceRule.item2;
 
     // 如果任务没有 scheduled 日期，尝试从文件名提取日期
+    // 如果任务没有 scheduled 日期，尝试从文件名提取日期
     DateTime? finalScheduledDateTime = scheduledDateTime;
+    bool inferredDate = false;
     if (finalScheduledDateTime == null && taskSource != null) {
       final fileDate =
           FilenameDateExtractor.extractDateFromPath(taskSource.fileName);
       if (fileDate != null) {
         finalScheduledDateTime = fileDate;
+        inferredDate = true;
         Logger().d(
             'Inherited date from filename: ${taskSource.fileName} -> $fileDate');
       }
@@ -253,6 +256,7 @@ class TaskParser extends MarkdownTaskMarkers {
         start: startDate.item1,
         scheduled: finalScheduledDateTime,
         scheduledTime: scheduledDateTime?.second == 1,
+        isScheduledDateInferred: inferredDate,
         done: doneDate.item1,
         cancelled: cancelledDate.item1,
         recurranceRule: recurranceRule.item1,

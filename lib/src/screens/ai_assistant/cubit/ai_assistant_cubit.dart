@@ -12,6 +12,7 @@ import 'package:obsi/src/core/ai_assistant/tools_registry.dart';
 import 'package:obsi/src/core/tasks/task_manager.dart';
 import 'package:flutter_chat_types/flutter_chat_types.dart' as msg_types;
 import 'package:obsi/src/screens/settings/settings_controller.dart';
+import 'package:obsi/src/core/ai_assistant/chatgpt_assistant.dart';
 import 'package:openai_dart/openai_dart.dart';
 import 'ai_assistant_state.dart';
 
@@ -23,10 +24,10 @@ class AIAssistantCubit extends Cubit<AIAssistantState> {
   final _welcomeMessage = [
     "👋 Welcome to AI Assistant!",
     "",
-    "To get started, please send your Gemini API key.",
+    "To get started, please enter your API key or configure settings.",
     "",
-    "🔑 Get your free API key at:",
-    "https://aistudio.google.com/app/apikey",
+    "🔑 You can configure Base URL and Model Name in Settings.",
+    "Default is Google Gemini if not configured.",
     "",
     "Your API key will be saved locally and securely on your device."
   ];
@@ -191,11 +192,24 @@ class AIAssistantCubit extends Cubit<AIAssistantState> {
   }
 
   void _initializeAIAssistant() {
-    aiAssistant = GeminiAssistant(
-        SettingsController.getInstance().chatGptKey ?? '',
-        ToolsRegistry.getInstance());
-    aiAssistant
-        ?.reInitialize(SettingsController.getInstance().chatGptKey ?? '');
+    final settings = SettingsController.getInstance();
+    final apiKey = settings.chatGptKey ?? '';
+    final baseUrl = settings.aiBaseUrl;
+    final modelName = settings.aiModelName;
+
+    bool useOpenAI = (baseUrl != null && baseUrl.isNotEmpty) ||
+        (modelName != null &&
+            modelName.isNotEmpty &&
+            !modelName.toLowerCase().contains('gemini'));
+
+    if (useOpenAI) {
+      aiAssistant = ChatGptAssistant(apiKey, ToolsRegistry.getInstance(),
+          baseUrl: baseUrl, modelName: modelName);
+    } else {
+      aiAssistant = GeminiAssistant(apiKey, ToolsRegistry.getInstance());
+    }
+
+    aiAssistant?.reInitialize(apiKey, baseUrl: baseUrl, modelName: modelName);
     _setupMessageListener();
   }
 

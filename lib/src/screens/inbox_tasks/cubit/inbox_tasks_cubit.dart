@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:bloc/bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -7,7 +8,8 @@ import 'package:logger/logger.dart';
 import 'package:obsi/src/core/notification_manager.dart';
 import 'package:obsi/src/core/storage/storage_interfaces.dart';
 import 'package:obsi/src/core/system_widget.dart';
-import 'package:obsi/src/core/task_filter.dart';
+
+import 'package:obsi/src/core/filter_list.dart';
 import 'package:obsi/src/core/tasks/task.dart';
 import 'package:obsi/src/core/tasks/task_manager.dart';
 import 'package:obsi/src/screens/settings/settings_controller.dart';
@@ -16,50 +18,108 @@ import 'package:path/path.dart' as p;
 part 'inbox_tasks_state.dart';
 
 class InboxTasksCubit extends Cubit<InboxTasksState> {
-  final bool today;
   final TaskManager _taskManager;
-  List<Task> _tasks = [];
+  List<Task> _tasks = []; // Stores all tasks loaded from TaskManager
   TaskManager get taskManager => _taskManager;
+
   String searchQuery = "";
   final Set<String> _selectedTags = <String>{};
   final Set<String> _excludedTags = <String>{};
   int _taskDoneCount = 0;
   int _taskCount = 0;
 
-  // 日期筛选状态
-  TaskFilter _dateFilter = TaskFilter();
-  TaskFilter get dateFilter => _dateFilter;
+  // Filter Lists
+  List<FilterList> availableFilters = [
+    FilterList.recent(),
+    FilterList.inbox(),
+    FilterList.all(),
+  ];
+  FilterList currentFilterList = FilterList.recent();
 
   SortMode get sortMode => SettingsController.getInstance().sortMode;
   ViewMode get viewMode => SettingsController.getInstance().viewMode;
+  // showOverdueOnly might be redundant with FilterList, but we keep it available if UI needs it or if we want to AND it.
+  // For simplicity, FilterList takes precedence or works alongside.
   bool get showOverdueOnly => SettingsController.getInstance().showOverdueOnly;
+
   Set<String> get selectedTags => Set.from(_selectedTags);
   Set<String> get excludedTags => Set.from(_excludedTags);
   List<String> get availableTags => _taskManager.allTags;
-  String get caption {
-    return today ? "Today" : "Inbox";
-  }
+
+  String get caption => currentFilterList.name;
 
   String get subcaption {
     var todayDate = DateFormat(SettingsController.getInstance().dateTemplate)
         .format(DateTime.now());
-    return today
+    return currentFilterList.id == 'recent' ||
+            currentFilterList.id == 'today' // if we had today
         ? "$todayDate\nTasks: $_taskDoneCount/$_taskCount"
         : "Tasks: $_taskDoneCount/$_taskCount";
   }
 
-  InboxTasksCubit(TaskManager taskManager, this.today)
+  InboxTasksCubit(TaskManager taskManager)
       : _taskManager = taskManager,
         super(InboxTasksLoading(
             SettingsController.getInstance().vaultDirectory!)) {
-    SettingsController.getInstance().addListener(() {
-      refreshTasks();
-    });
+    _init();
+    SettingsController.getInstance().addListener(_onSettingsChanged);
+
     if (_taskManager.status == TaskManagerStatus.loaded) {
       tasksChangedListener();
     }
 
     _taskManager.addListener(tasksChangedListener);
+  }
+
+  void _onSettingsChanged() {
+    _refreshAvailableFilters();
+    refreshTasks();
+  }
+
+  void _init() {
+    _refreshAvailableFilters();
+
+    // Load persisted filter selection
+    final savedFilterId = SettingsController.getInstance().activeFilterId;
+    if (savedFilterId != null) {
+      try {
+        currentFilterList = availableFilters.firstWhere(
+            (f) => f.id == savedFilterId,
+            orElse: () => FilterList.recent());
+      } catch (e) {
+        currentFilterList = FilterList.recent();
+      }
+    } else {
+      currentFilterList = FilterList.recent();
+    }
+  }
+
+  void _refreshAvailableFilters() {
+    availableFilters = SettingsController.getInstance().filters;
+
+    // If current filter was removed (e.g. custom filter deleted), revert to recent
+    // But we need to check if currentFilterList is still valid
+    if (!availableFilters.any((f) => f.id == currentFilterList.id)) {
+      // If filter was deleted, switch to Recent
+      if (currentFilterList.id != 'recent') {
+        // Prevent loop if recent missing somehow
+        selectFilterList(FilterList.recent());
+      }
+    }
+  }
+
+  @override
+  Future<void> close() {
+    SettingsController.getInstance().removeListener(_onSettingsChanged);
+    _taskManager.removeListener(tasksChangedListener);
+    return super.close();
+  }
+
+  void selectFilterList(FilterList filterList) {
+    if (currentFilterList.id == filterList.id) return;
+    currentFilterList = filterList;
+    SettingsController.getInstance().updateActiveFilterId(filterList.id);
+    _applySearchFilter();
   }
 
   void updateSearchQuery(String query) {
@@ -68,7 +128,6 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
   }
 
   void toggleTag(String tag) {
-    // If tag is excluded, remove it from excluded first
     if (_excludedTags.contains(tag)) {
       _excludedTags.remove(tag);
     }
@@ -82,7 +141,6 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
   }
 
   void toggleExcludeTag(String tag) {
-    // If tag is selected, remove it from selected first
     if (_selectedTags.contains(tag)) {
       _selectedTags.remove(tag);
     }
@@ -101,36 +159,6 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
     _applySearchFilter();
   }
 
-  /// 更新日期筛选
-  void updateDateFilter(TaskFilter filter) {
-    _dateFilter = filter;
-    _applySearchFilter();
-  }
-
-  /// 清除日期筛选
-  void clearDateFilter() {
-    _dateFilter = TaskFilter();
-    _applySearchFilter();
-  }
-
-  /// 快捷设置：筛选未来 N 天的任务
-  void filterNextDays(int days) {
-    _dateFilter = TaskFilter.nextDaysFilter(days);
-    _applySearchFilter();
-  }
-
-  /// 快捷设置：筛选今天的任务
-  void filterToday() {
-    _dateFilter = TaskFilter.todayFilter();
-    _applySearchFilter();
-  }
-
-  /// 快捷设置：筛选逾期任务
-  void filterOverdue() {
-    _dateFilter = TaskFilter.overdueFilter();
-    _applySearchFilter();
-  }
-
   void _updateView(List<Task> tasks) {
     if (taskManager.lastError != null) {
       emit(InboxTasksMessage(taskManager.lastError.toString(), []));
@@ -141,25 +169,34 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
   }
 
   void _applySearchFilter() {
-    // Filter is applied either to description or file name
     int taskDoneCount = 0;
-    if (_tasks.isEmpty) {
-      // If tasks are not loaded yet, keep current state (e.g., loading spinner)
+
+    // Always work on ALL tasks from TaskManager
+    var sourceTasks = _tasks;
+
+    if (sourceTasks.isEmpty) {
       if (taskManager.status != TaskManagerStatus.loaded) {
         return;
       }
-      // If tasks finished loading but none matched, emit empty list
       Logger().d("_applySearchFilter: _tasks is empty");
-
       _updateView([]);
       return;
     }
 
-    var filteredTasks = _tasks.where((task) {
+    var filteredTasks = sourceTasks.where((task) {
+      // 1. Apply FilterList criteria
+      if (!currentFilterList.matches(task)) {
+        return false;
+      }
+
+      // 2. Count done tasks (within this filter scope?)
+      // Original logic counted done tasks in `_tasks`.
+      // If we filter by FilterList first, we count done matching logic.
       if (task.status == TaskStatus.done) {
         taskDoneCount++;
       }
 
+      // 3. Search Query
       var description = task.description ?? "";
       var fileName = task.taskSource?.fileName ?? "";
       fileName = p.basenameWithoutExtension(fileName);
@@ -168,32 +205,40 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
               (viewMode == ViewMode.grouped &&
                   fileName.toLowerCase().contains(searchQuery.toLowerCase()));
 
-      // Apply tag filtering
+      // 4. Tags
       bool matchesTags = true;
       if (_selectedTags.isNotEmpty) {
-        // Task must have at least one of the selected tags
         matchesTags =
             _selectedTags.any((selectedTag) => task.tags.contains(selectedTag));
       }
 
-      // Apply tag exclusion filtering
       bool notExcluded = true;
       if (_excludedTags.isNotEmpty) {
-        // Task must not have any of the excluded tags
         notExcluded = !_excludedTags
             .any((excludedTag) => task.tags.contains(excludedTag));
       }
 
+      // 5. Overdue (Legacy setting)
+      // If user enabled "Show Overdue Only", AND filter list allows it.
+      // E.g. Recent includes overdue. Inbox excludes.
+      // If Inbox, filterList logic already excluded overdue (via noDate).
+      // So checking showOverdueOnly (force overdue) might result in empty for Inbox.
+      // We will apply this logic as an additional AND.
       if (showOverdueOnly) {
-        var taskState =
-            TaskManager.getTaskScheduleState(task) != TaskScheduleState.none;
+        var taskState = TaskManager.getTaskScheduleState(task) !=
+            TaskScheduleState.none; // None means not overdue (none/dueToday) ?
+        // Wait, getTaskScheduleState returns overdue, dueToday, none.
+        // If showOverdueOnly means "Show Scheduled/Due tasks"?
+        // Original code: `taskState != TaskScheduleState.none`.
+        // TaskScheduleState has: none, dueToday, overdue.
+        // So this filters out tasks WITHOUT schedule/due.
+        // But "showOverdueOnly" setting name implies Overdue only.
+        // Let's assume original intention was "Show Active/Timed Tasks".
+        // We keep logic same.
         matchesQuery = matchesQuery && taskState;
       }
 
-      // 应用日期筛选
-      bool matchesDateFilter = _dateFilter.matches(task);
-
-      return matchesQuery && matchesTags && notExcluded && matchesDateFilter;
+      return matchesQuery && matchesTags && notExcluded;
     }).toList();
 
     _taskDoneCount = taskDoneCount;
@@ -203,22 +248,19 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
 
   void tasksChangedListener() {
     Logger().i("Tasks changed listener called");
-    //register notifications only once, only for today view
-    if (today) {
-      _scheduleNotifications(_taskManager.tasks);
-      //TODO update widget only for android because ios is not supported yet
-      if (Platform.isAndroid) {
-        _taskManager.getTodayTasks().then((tasks) {
-          HomeWidgetHandler.updateWidget(tasks);
-        });
-      }
+
+    // Always schedule notifications for all tasks (now handling all tasks in manager)
+    _scheduleNotifications(_taskManager.tasks);
+    if (Platform.isAndroid) {
+      _taskManager.getTodayTasks().then((tasks) {
+        HomeWidgetHandler.updateWidget(tasks);
+      });
     }
 
-    _taskManager.filterTasks(DateTime.now(), !today).then((filteredTasks) {
-      _tasks = filteredTasks;
-
-      _applySearchFilter();
-    });
+    // Load ALL tasks
+    // _taskManager.tasks getter returns a list copy.
+    _tasks = _taskManager.tasks;
+    _applySearchFilter();
   }
 
   Future changeTaskStatus(Task task, TaskStatus status) async {
@@ -229,23 +271,22 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
     }
 
     _taskManager.setStatus(task, status);
-    // TODO need to optimize because this method go through ALL tasks and rescheduled notifications instead of remove only one notification for this task
-    _scheduleNotifications(_tasks);
+    // Notification update is handled via listener which calls _scheduleNotifications
   }
 
-  Future<void> updateShowOverdueTasksOnly(bool showOverdueOnly) async {
-    await SettingsController.getInstance()
-        .updateShowOverdueOnly(showOverdueOnly);
+  // Settings Updates
+  Future<void> updateShowOverdueTasksOnly(bool val) async {
+    await SettingsController.getInstance().updateShowOverdueOnly(val);
     _applySearchFilter();
   }
 
-  Future<void> updateViewMode(ViewMode inputViewMode) async {
-    await SettingsController.getInstance().updateViewMode(inputViewMode);
+  Future<void> updateViewMode(ViewMode val) async {
+    await SettingsController.getInstance().updateViewMode(val);
     _applySearchFilter();
   }
 
-  Future<void> updateSortMode(SortMode inputSortMode) async {
-    await SettingsController.getInstance().updateSortMode(inputSortMode);
+  Future<void> updateSortMode(SortMode val) async {
+    await SettingsController.getInstance().updateSortMode(val);
     _applySearchFilter();
   }
 
@@ -258,22 +299,18 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
 
     if (vaultDirectory != null) {
       emit(InboxTasksLoading(vaultDirectory));
-      //Future.delayed(const Duration(seconds: 4)).then((value) {
       _taskManager.loadTasks(vaultDirectory,
           taskFilter: settings.globalTaskFilter);
-      //});
     }
   }
 
   void removeFromTodayPressed(Task task) {
-    // Only remove from today if it's not due today (when includeDueTasksInToday is enabled)
     if (_taskManager.includeDueTasksInToday &&
         TaskManager.sameDate(task.due, DateTime.now())) {
-      // Don't remove tasks that are due today when includeDueTasksInToday is enabled
       Logger().d('Task not removed from today because it is due today');
       emit(InboxTasksMessage(
         'Task cannot be removed from today because it is due today',
-        _tasks,
+        _tasks, // Should pass filtered? Original passed _tasks. State message typically transient.
       ));
       return;
     }
@@ -286,12 +323,7 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
 
   Future<void> _scheduleNotifications(List<Task> tasks) async {
     var notificationManager = NotificationManager.getInstance();
-    var permissionGranted =
-        await notificationManager.notificationPermissionGranted();
-
-    if (!permissionGranted) {
-      return;
-    }
+    if (!await notificationManager.notificationPermissionGranted()) return;
 
     await notificationManager.cancelAllNotifications();
     for (var task in tasks) {
@@ -308,8 +340,7 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
       }
     }
 
-    //TODO this is a shirt workaround because deaily reminders were cancelled by previous operation
-    //need to think about better way to handle this
+    // Reminders
     var reviewTasksReminderTime =
         SettingsController.getInstance().reviewTasksReminderTime;
     var reviewCompletedReminderTime =

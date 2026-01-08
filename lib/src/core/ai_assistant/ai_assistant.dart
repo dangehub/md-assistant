@@ -43,12 +43,14 @@ abstract class AIAssistant with ChangeNotifier {
   Stream<AIMessage> get messageStream => _messageController.stream;
 
   String? apiKey;
+  String? baseUrl;
+  String? modelName;
   static const String taskBeginMarker = "<!-task->";
   static const String taskEndMarker = "<!-/tasks->";
   static const String sourceInfoMarker = "💡";
   final toolsRegistry;
 
-  AIAssistant(this.apiKey, this.toolsRegistry);
+  AIAssistant(this.apiKey, this.toolsRegistry, {this.baseUrl, this.modelName});
   factory AIAssistant.getInstance(String apiKey, ToolsRegistry toolsRegistry) {
     return ChatGptAssistant(apiKey, toolsRegistry);
   }
@@ -58,7 +60,7 @@ abstract class AIAssistant with ChangeNotifier {
 
   Future<void> confirmToolAction(int actionId, bool allowed);
 
-  void reInitialize(String apiKey);
+  void reInitialize(String apiKey, {String? baseUrl, String? modelName});
 
   List<ChatCompletionMessage> addSystemPrompt(
       List<ChatCompletionMessage> messages, String? currentDateTime) {

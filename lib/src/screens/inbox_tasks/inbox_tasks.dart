@@ -13,7 +13,9 @@ import 'package:obsi/src/screens/task_editor/cubit/task_editor_cubit.dart';
 import 'package:obsi/src/screens/task_editor/task_editor.dart';
 import 'package:obsi/src/widgets/task_card.dart';
 import 'package:obsi/src/screens/inbox_tasks/cubit/inbox_tasks_cubit.dart';
-import 'package:obsi/src/core/task_filter.dart';
+
+import 'package:obsi/src/core/filter_list.dart';
+import 'package:obsi/src/screens/inbox_tasks/filter_management_screen.dart';
 import 'package:obsi/src/core/variable_resolver.dart';
 import 'package:path/path.dart' as p;
 
@@ -23,10 +25,7 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
   final TextEditingController _searchController = TextEditingController();
 
   InboxTasks(this._inboxTaskCubit, {super.key}) {
-    // there are two instances of InboxTasks but we don't need to refresh tasks two times so only one instance is subscribed
-    if (_inboxTaskCubit.today) {
-      WidgetsBinding.instance.addObserver(this);
-    }
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
@@ -39,64 +38,111 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     _inboxTaskCubit.updateSearchQuery(_searchController.text);
-    // if (_inboxTaskCubit.today) {
-    //   WidgetsBinding.instance.addPostFrameCallback((_) {
-    //     MainMessages.showDialogIfNeeded(context);
-    //   });
-    // }
+
     return Scaffold(
         appBar: _showAppBar(context),
         floatingActionButton: _showActionButton(context),
-        body: BlocBuilder<InboxTasksCubit, InboxTasksState>(
-            bloc: _inboxTaskCubit,
-            builder: (context, state) {
-              if (state is InboxTasksList) {
-                return _showListView(
-                    context, state.tasks, _inboxTaskCubit.searchQuery);
-              }
+        body: Column(
+          children: [
+            _buildFilterBar(context),
+            Expanded(
+              child: BlocBuilder<InboxTasksCubit, InboxTasksState>(
+                  bloc: _inboxTaskCubit,
+                  builder: (context, state) {
+                    if (state is InboxTasksList) {
+                      return _showListView(
+                          context, state.tasks, _inboxTaskCubit.searchQuery);
+                    }
 
-              if (state is InboxTasksLoading) {
-                return Center(
-                    child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: <Widget>[
-                    const CircularProgressIndicator(),
-                    const SizedBox(height: 20),
-                    Text('Loading tasks from \n${state.vault}'),
-                  ],
-                ));
-              }
+                    if (state is InboxTasksLoading) {
+                      return Center(
+                          child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: <Widget>[
+                          const CircularProgressIndicator(),
+                          const SizedBox(height: 20),
+                          Text('Loading tasks from \n${state.vault}'),
+                        ],
+                      ));
+                    }
 
-              if (state is InboxTasksMessage) {
-                // Show the message to user via SnackBar
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(state.message),
-                      duration: const Duration(seconds: 3),
-                    ),
-                  );
-                });
-                // Display the tasks along with the message
-                return _showListView(
-                    context, state.tasks, _inboxTaskCubit.searchQuery);
-              }
+                    if (state is InboxTasksMessage) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(state.message),
+                            duration: const Duration(seconds: 3),
+                          ),
+                        );
+                      });
+                      return _showListView(
+                          context, state.tasks, _inboxTaskCubit.searchQuery);
+                    }
 
-              return Container();
-            }));
+                    return Container();
+                  }),
+            ),
+          ],
+        ));
+  }
+
+  Widget _buildFilterBar(BuildContext context) {
+    return BlocBuilder<InboxTasksCubit, InboxTasksState>(
+        bloc: _inboxTaskCubit,
+        builder: (context, state) {
+          final filters = _inboxTaskCubit.availableFilters;
+          final currentFilter = _inboxTaskCubit.currentFilterList;
+
+          return Container(
+            height: 50,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      ...filters.map((filter) {
+                        final isSelected = filter.id == currentFilter.id;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: ChoiceChip(
+                            label: Text(filter.name),
+                            // avatar: Icon(filter.icon, size: 16), // Icons removed in favor of Emojis
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              if (selected) {
+                                _inboxTaskCubit.selectFilterList(filter);
+                              }
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.tune), // Tune/Settings icon
+                  onPressed: () => _openFilterManagement(context),
+                  tooltip: "管理筛选",
+                ),
+              ],
+            ),
+          );
+        });
   }
 
   ListView _showListView(
       BuildContext context, List<Task> tasks, String highlightedText) {
     final items = _createViewItems(context, tasks, highlightedText);
-    // Add extra space after the last card to avoid FAB overlap
     return ListView(
       controller: _scrollController,
       children: [
         _buildTagFilterLine(context),
         ...items,
-        const SizedBox(height: 80), // Adjust height as needed for FAB
+        const SizedBox(height: 80),
       ],
     );
   }
@@ -107,7 +153,11 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
           alignment: Alignment.centerLeft,
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(_inboxTaskCubit.caption),
+            BlocBuilder<InboxTasksCubit, InboxTasksState>(
+                bloc: _inboxTaskCubit,
+                builder: (context, _) {
+                  return Text(_inboxTaskCubit.caption);
+                }),
             BlocBuilder<InboxTasksCubit, InboxTasksState>(
                 bloc: _inboxTaskCubit,
                 builder: (context, _) {
@@ -141,7 +191,9 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
               );
             },
           ),
-          // Overdue toggle button
+          // Overdue toggle button - Keeping it for legacy support if needed
+          // Or we can remove it if "Recent" filter is sufficient.
+          // Keeping it as an additional filter.
           BlocBuilder<InboxTasksCubit, InboxTasksState>(
             bloc: _inboxTaskCubit,
             builder: (context, _) {
@@ -160,73 +212,10 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
               );
             },
           ),
-          // 日期筛选按钮
-          BlocBuilder<InboxTasksCubit, InboxTasksState>(
-            bloc: _inboxTaskCubit,
-            builder: (context, _) {
-              final hasFilter =
-                  _inboxTaskCubit.dateFilter.scheduledDateFilter !=
-                          DateFilterType.none ||
-                      _inboxTaskCubit.dateFilter.dueDateFilter !=
-                          DateFilterType.none;
-
-              return PopupMenuButton<DateFilterType>(
-                tooltip: '日期筛选',
-                icon: Icon(
-                  Icons.date_range,
-                  color:
-                      hasFilter ? Theme.of(context).colorScheme.primary : null,
-                ),
-                onSelected: (DateFilterType type) {
-                  switch (type) {
-                    case DateFilterType.none:
-                      _inboxTaskCubit.clearDateFilter();
-                      break;
-                    case DateFilterType.today:
-                      _inboxTaskCubit.filterToday();
-                      break;
-                    case DateFilterType.thisWeek:
-                      _inboxTaskCubit.filterNextDays(7);
-                      break;
-                    case DateFilterType.nextNDays:
-                      _inboxTaskCubit.filterNextDays(14);
-                      break;
-                    case DateFilterType.overdue:
-                      _inboxTaskCubit.filterOverdue();
-                      break;
-                    default:
-                      break;
-                  }
-                },
-                itemBuilder: (BuildContext context) => [
-                  const PopupMenuItem(
-                    value: DateFilterType.none,
-                    child: Text('全部任务'),
-                  ),
-                  const PopupMenuItem(
-                    value: DateFilterType.today,
-                    child: Text('今天'),
-                  ),
-                  const PopupMenuItem(
-                    value: DateFilterType.thisWeek,
-                    child: Text('未来 7 天'),
-                  ),
-                  const PopupMenuItem(
-                    value: DateFilterType.nextNDays,
-                    child: Text('未来 14 天'),
-                  ),
-                  const PopupMenuItem(
-                    value: DateFilterType.overdue,
-                    child: Text('已逾期'),
-                  ),
-                ],
-              );
-            },
-          ),
+          // View Mode Switcher
           BlocBuilder<InboxTasksCubit, InboxTasksState>(
               bloc: _inboxTaskCubit,
               builder: (context, _) {
-                // Helper function to get next view mode
                 ViewMode getNextViewMode(ViewMode current) {
                   switch (current) {
                     case ViewMode.list:
@@ -238,7 +227,6 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
                   }
                 }
 
-                // Helper function to get appropriate icon for each mode
                 IconData getViewModeIcon(ViewMode mode) {
                   switch (mode) {
                     case ViewMode.list:
@@ -250,21 +238,8 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
                   }
                 }
 
-                // Helper function to get tooltip text
-                String getTooltipText(ViewMode currentMode) {
-                  ViewMode nextMode = getNextViewMode(currentMode);
-                  switch (nextMode) {
-                    case ViewMode.list:
-                      return "Switch to list view";
-                    case ViewMode.grouped:
-                      return "Switch to grouped view";
-                    case ViewMode.calendar:
-                      return "Switch to calendar view";
-                  }
-                }
-
                 return IconButton(
-                    tooltip: getTooltipText(_inboxTaskCubit.viewMode),
+                    tooltip: "Switch View Mode",
                     onPressed: () {
                       ViewMode nextMode =
                           getNextViewMode(_inboxTaskCubit.viewMode);
@@ -272,48 +247,6 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
                     },
                     icon: Icon(getViewModeIcon(_inboxTaskCubit.viewMode)));
               }),
-
-          // BlocBuilder<InboxTasksCubit, InboxTasksState>(
-          //     bloc: _inboxTaskCubit,
-          //     builder: (context, _) {
-          //       return IconButton(
-          //           tooltip: "Sort",
-          //           onPressed: () {
-          //             _inboxTaskCubit.updateSortMode(
-          //                 _inboxTaskCubit.sortMode == SortMode.none
-          //                     ? SortMode.byCreationDate
-          //                     : SortMode.none);
-          //           },
-          //           icon: Icon(_inboxTaskCubit.sortMode == SortMode.none
-          //               ? Icons.swap_vert
-          //               : Icons.sort));
-          //     }),
-
-          //   DropdownButtonHideUnderline(
-          //     child: DropdownButton<String>(
-          //       icon: Row(children: [
-          //         const Icon(Icons.sort),
-          //         const Icon(Icons.more_vert)
-          //       ]),
-          //       items: [
-          //         DropdownMenuItem(
-          //           value: 'item1',
-          //           child: Text('Item 1'),
-          //         ),
-          //         DropdownMenuItem(
-          //           value: 'item2',
-          //           child: Text('Item 2'),
-          //         ),
-          //       ],
-          //       onChanged: (value) {
-          //         if (value == 'item1') {
-          //           // Handle Item 1 action
-          //         } else if (value == 'item2') {
-          //           // Handle Item 2 action
-          //         }
-          //       },
-          //     ),
-          //   ),
         ])
       ],
     );
@@ -327,7 +260,6 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
         final selectedTags = _inboxTaskCubit.selectedTags;
         final excludedTags = _inboxTaskCubit.excludedTags;
 
-        // Don't show the tag filter line if there are no tags
         if (availableTags.isEmpty) {
           return const SizedBox.shrink();
         }
@@ -432,6 +364,16 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
         var createTasksPath =
             p.join(settings.vaultDirectory!, resolvedTasksFile);
 
+        // Determine default date based on current filter or today
+        // If "Inbox" (No Date) is selected, maybe default to NO date?
+        // If "Recent" or "All", default to Today.
+        DateTime? defaultScheduled;
+        if (_inboxTaskCubit.currentFilterList.id == 'inbox') {
+          defaultScheduled = null;
+        } else {
+          defaultScheduled = DateTime.now();
+        }
+
         Navigator.push(
             context,
             MaterialPageRoute(
@@ -439,10 +381,7 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
                   create: (context) => TaskEditorCubit(
                       _inboxTaskCubit.taskManager,
                       task: Task("",
-                          created: DateTime.now(),
-                          scheduled: _inboxTaskCubit.today == true
-                              ? DateTime.now()
-                              : null),
+                          created: DateTime.now(), scheduled: defaultScheduled),
                       createTasksPath: createTasksPath),
                   child: const TaskEditor()),
             ));
@@ -469,11 +408,10 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
     List<Card> calendarViews = [];
     List<TaskCard> calendarTasks = [];
 
-    //sort tasks by scheduled date
     tasks.sort((a, b) {
       if (a.scheduled == null && b.scheduled == null) return 0;
-      if (a.scheduled == null) return 1; // nulls go to the end
-      if (b.scheduled == null) return -1; // nulls go to
+      if (a.scheduled == null) return 1;
+      if (b.scheduled == null) return -1;
       return a.scheduled!.compareTo(b.scheduled!);
     });
 
@@ -481,11 +419,10 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
     bool hitPremiumLimit = false;
     for (var task in tasks) {
       if (!SettingsController.getInstance().hasActiveSubscription && i > 10) {
-        //show card with premium upgrade suggestion and skip the rest tasks
         calendarViews.add(_createPremiumUpgradeCalendarView(
             context, tasks.length - i, highlightedText));
         hitPremiumLimit = true;
-        break; // Skip the rest of the tasks
+        break;
       }
 
       if ((calendarTasks.isNotEmpty &&
@@ -508,7 +445,6 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
       i++;
     }
 
-    // Add the last group only if we didn't hit the premium limit
     if (calendarTasks.isNotEmpty && !hitPremiumLimit) {
       calendarViews.add(CalendarView(
         calendarTasks,
@@ -626,6 +562,10 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
 
   TaskCard _createTaskCard(
       BuildContext context, Task task, String highlightedText) {
+    // Determine context-aware action for right button
+    bool isScheduledToday =
+        TaskManager.sameDate(task.scheduled, DateTime.now());
+
     return TaskCard(task, hightlightedText: highlightedText,
         taskDonePressed: (bool? res) {
       if (res != null) {
@@ -642,12 +582,12 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
                 child: const TaskEditor()),
           ));
     },
-        rightButtonPressed: _inboxTaskCubit.today
+        rightButtonPressed: isScheduledToday
             ? () => _inboxTaskCubit.removeFromTodayPressed(task)
-            : () => _inboxTaskCubit.assignForTodayPressed(
-                  task,
-                ),
-        rightButtonIcon: _inboxTaskCubit.today ? Icons.remove : Icons.add,
+            : () => _inboxTaskCubit.assignForTodayPressed(task),
+        rightButtonIcon: isScheduledToday
+            ? Icons.remove_circle_outline
+            : Icons.add_circle_outline,
         startWorkflowPressed: task.tags.contains("obsi_ai")
             ? () => _startWorkflowPressed(context, task)
             : null);
@@ -655,15 +595,20 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
 
   Future<void> _startWorkflowPressed(BuildContext context, Task task) async {
     if (context.mounted) {
-      // Find the MainNavigator ancestor to switch tabs
       final mainNavigatorState =
           context.findAncestorStateOfType<State<MainNavigator>>();
 
       if (mainNavigatorState != null) {
-        // Call the switchToAIWithMessage method using dynamic to access private state
         (mainNavigatorState as dynamic)
             .switchToAIWithMessage(task.description ?? '');
       }
     }
+  }
+
+  void _openFilterManagement(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const FilterManagementScreen()),
+    );
   }
 }

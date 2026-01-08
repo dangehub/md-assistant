@@ -13,8 +13,9 @@ import 'ai_assistant.dart';
 class GeminiAssistant extends AIAssistant {
   final String modelName = 'gemini-2.0-flash-exp';
   final Map<int, Completer<bool>> _pendingConfirmations = {};
-  GeminiAssistant(String apiKey, ToolsRegistry registry)
-      : super(apiKey, registry) {
+  GeminiAssistant(String apiKey, ToolsRegistry registry,
+      {String? baseUrl, String? modelName})
+      : super(apiKey, registry, baseUrl: baseUrl, modelName: modelName) {
     Gemini.init(apiKey: apiKey);
 
     //Gemini.instance.listModels().then((models) {
@@ -23,7 +24,7 @@ class GeminiAssistant extends AIAssistant {
   }
 
   @override
-  void reInitialize(String apiKey) {
+  void reInitialize(String apiKey, {String? baseUrl, String? modelName}) {
     this.apiKey = apiKey;
     Gemini.reInitialize(apiKey: apiKey);
   }

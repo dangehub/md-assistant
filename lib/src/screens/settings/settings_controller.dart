@@ -11,6 +11,10 @@ import 'package:external_path/external_path.dart';
 import 'package:filesystem_picker/filesystem_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'dart:convert';
+import 'package:obsi/src/core/filter_list.dart';
+import 'package:obsi/src/core/task_filter.dart';
+import 'package:uuid/uuid.dart';
 
 class SettingsController with ChangeNotifier {
   static SettingsController? _instance;
@@ -165,6 +169,10 @@ class SettingsController with ChangeNotifier {
   String? _globalTaskFilter;
   int _rateDialogCounter = 0;
   String? _chatGptKey;
+  String? _aiBaseUrl;
+  String? _aiModelName;
+  String? _activeFilterId;
+  List<FilterList> _filters = [];
 
   bool _showOverdueOnly = false;
   bool _includeDueTasksInToday = true;
@@ -193,6 +201,10 @@ class SettingsController with ChangeNotifier {
   DateTime? get zeroDate => _zeroDate;
   int get rateDialogCounter => _rateDialogCounter;
   String? get chatGptKey => _chatGptKey;
+  String? get aiBaseUrl => _aiBaseUrl;
+  String? get aiModelName => _aiModelName;
+  String? get activeFilterId => _activeFilterId;
+  List<FilterList> get filters => List.unmodifiable(_filters);
   bool get showOverdueOnly => _showOverdueOnly;
   bool get includeDueTasksInToday => _includeDueTasksInToday;
   bool get onboardingComplete => _onboardingComplete;
@@ -212,14 +224,62 @@ class SettingsController with ChangeNotifier {
     _sortMode = await _settingsService.sortMode();
     _globalTaskFilter = await _settingsService.globalTaskFilter();
     _chatGptKey = await _settingsService.chatGptKey();
+    _aiBaseUrl = await _settingsService.aiBaseUrl();
+    _aiModelName = await _settingsService.aiModelName();
     _showOverdueOnly = await _settingsService.showOverdueOnly();
     _includeDueTasksInToday = await _settingsService.includeDueTasksInToday();
     _onboardingComplete = await _settingsService.onboardingComplete();
     _subscriptionStatus = await _settingsService.subscriptionStatus();
     _subscriptionExpiry = await _settingsService.subscriptionExpiry();
     _reviewTasksReminderTime = await _settingsService.reviewTasksReminderTime();
+
     _reviewCompletedReminderTime =
         await _settingsService.reviewCompletedReminderTime();
+    _activeFilterId = await _settingsService.activeFilterId();
+
+    var customFiltersJson = await _settingsService.customFilters();
+    if (customFiltersJson.isEmpty) {
+      // First run or migration: create defaults
+      _filters = _createDefaultFilters();
+      await _saveFilters();
+    } else {
+      // Load existing
+      // TODO: Migration from old "custom only" to "unified"
+      // Basic check: if we think these are just custom filters (e.g. none have IDs like 'filter_inbox'),
+      // we might want to prepend defaults.
+      // For now, let's assume we need to prepend defaults if we don't find "Inbox".
+      var loadedFilters = customFiltersJson
+          .map((e) => FilterList.fromJson(jsonDecode(e)))
+          .toList();
+
+      bool hasInbox = loadedFilters.any((f) =>
+          f.id == 'filter_inbox' ||
+          f.name == 'Inbox' ||
+          f.name == '📥 Inbox' ||
+          f.name == '收集箱');
+
+      List<FilterList> mergedFilters;
+      if (!hasInbox) {
+        // Prioritize loaded filters first to keep user edits, then append defaults if missing
+        mergedFilters = [...loadedFilters, ..._createDefaultFilters()];
+      } else {
+        mergedFilters = loadedFilters;
+      }
+
+      // Deduplicate by ID, keeping the first occurrence (which comes from loadedFilters)
+      final uniqueFilters = <String, FilterList>{};
+      for (var f in mergedFilters) {
+        if (!uniqueFilters.containsKey(f.id)) {
+          uniqueFilters[f.id] = f;
+        }
+      }
+      _filters = uniqueFilters.values.toList();
+
+      // If we made changes (e.g. removed duplicates), save them
+      if (_filters.length != mergedFilters.length || !hasInbox) {
+        await _saveFilters();
+      }
+    }
 
     // Future<void> updateNotificationTime(DateTime? newNotifTime) async {
     //   if (newNotifTime == notificationTime) return;
@@ -253,6 +313,27 @@ class SettingsController with ChangeNotifier {
 
     _chatGptKey = newChatGptKey;
     await _settingsService.updateChatGptKey(newChatGptKey);
+  }
+
+  Future<void> updateAiBaseUrl(String? newBaseUrl) async {
+    if (newBaseUrl == aiBaseUrl) return;
+
+    _aiBaseUrl = newBaseUrl;
+    await _settingsService.updateAiBaseUrl(newBaseUrl);
+  }
+
+  Future<void> updateAiModelName(String? newModelName) async {
+    if (newModelName == aiModelName) return;
+
+    _aiModelName = newModelName;
+    await _settingsService.updateAiModelName(newModelName);
+  }
+
+  Future<void> updateActiveFilterId(String? newFilterId) async {
+    if (newFilterId == activeFilterId) return;
+
+    _activeFilterId = newFilterId;
+    await _settingsService.updateActiveFilterId(newFilterId);
   }
 
   Future<void> updateViewMode(ViewMode newViewMode) async {
@@ -449,5 +530,87 @@ class SettingsController with ChangeNotifier {
       return false;
     }
     return DateTime.now().isBefore(_subscriptionExpiry!);
+  }
+
+  List<FilterList> _createDefaultFilters() {
+    return [
+      FilterList(
+        id: 'filter_inbox',
+        name: '📥 Inbox',
+        icon: Icons
+            .inbox, // Keep generic icon for now, user can change name to emoji
+        type: FilterListType.builtin, // or custom
+        filter: TaskFilter(
+            // Inbox definition: usually no date or specifically "Inbox" status/path?
+            // Actually Inbox usually means "No Project" or "No Date"?
+            // Let's assume Inbox = All tasks for now, or specifically tasks in root?
+            // TaskForge default: All tasks sorted by creation?
+            // Let's use TaskFilter() defaults which is basically "All" but usually we want "No Date" or similar?
+            // For VaultMate, "Inbox" usually implies new tasks.
+            // Let's just create "All", "Today", "Upcoming".
+            ),
+        taskIds: [],
+      ),
+      FilterList(
+        id: 'filter_today',
+        name: '📅 Today',
+        icon: Icons.today,
+        type: FilterListType.builtin,
+        filter: TaskFilter.todayFilter(),
+        taskIds: [],
+      ),
+      FilterList(
+        id: 'filter_upcoming',
+        name: '🗓 Upcoming',
+        icon: Icons.calendar_today,
+        type: FilterListType.builtin,
+        filter: TaskFilter.nextDaysFilter(7),
+        taskIds: [],
+      ),
+      FilterList(
+        id: 'filter_completed',
+        name: '✅ Completed',
+        icon: Icons.done_all,
+        type: FilterListType.builtin,
+        filter: TaskFilter(statusFilter: StatusFilterType.done),
+        taskIds: [],
+      ),
+    ];
+  }
+
+  Future<void> addFilter(FilterList filter) async {
+    _filters.add(filter);
+    notifyListeners();
+    await _saveFilters();
+  }
+
+  Future<void> removeFilter(String id) async {
+    _filters.removeWhere((element) => element.id == id);
+    notifyListeners();
+    await _saveFilters();
+  }
+
+  Future<void> updateFilter(FilterList filter) async {
+    var index = _filters.indexWhere((element) => element.id == filter.id);
+    if (index != -1) {
+      _filters[index] = filter;
+      notifyListeners();
+      await _saveFilters();
+    }
+  }
+
+  Future<void> reorderFilters(int oldIndex, int newIndex) async {
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+    final item = _filters.removeAt(oldIndex);
+    _filters.insert(newIndex, item);
+    notifyListeners();
+    await _saveFilters();
+  }
+
+  Future<void> _saveFilters() async {
+    var jsonList = _filters.map((e) => jsonEncode(e.toJson())).toList();
+    await _settingsService.updateCustomFilters(jsonList);
   }
 }

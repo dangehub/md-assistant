@@ -49,7 +49,7 @@ class _MainNavigatorState extends State<MainNavigator> {
   /// Switch to AI tab and send a message
   void switchToAIWithMessage(String message) {
     setState(() {
-      _currentScreen = 2;
+      _currentScreen = 1;
     });
     // Send message after a short delay to ensure UI is ready
     Future.delayed(const Duration(milliseconds: 100), () {
@@ -69,8 +69,7 @@ class _MainNavigatorState extends State<MainNavigator> {
 
   void _updateScreens() {
     screens = [
-      InboxTasks(InboxTasksCubit(widget.taskManager, true)),
-      InboxTasks(InboxTasksCubit(widget.taskManager, false)),
+      InboxTasks(InboxTasksCubit(widget.taskManager)),
       AIAssistant(_aiAssistantCubit),
     ];
 
@@ -84,8 +83,8 @@ class _MainNavigatorState extends State<MainNavigator> {
   Widget build(BuildContext context) {
     // Create navigation items based on subscription status
     List<BottomNavigationBarItem> navigationItems = [
-      const BottomNavigationBarItem(icon: Icon(Icons.today), label: "Today"),
-      const BottomNavigationBarItem(icon: Icon(Icons.inbox), label: "Inbox"),
+      const BottomNavigationBarItem(
+          icon: Icon(Icons.check_circle_outline), label: "Tasks"),
       const BottomNavigationBarItem(
           icon: Icon(Icons.bubble_chart), label: "AI"),
     ];
