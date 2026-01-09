@@ -17,7 +17,7 @@
 
 ## 🚀 Key Differences & New Features
 
-MD Assistant builds upon the solid foundation of VaultMate with specific enhancements for power users:
+MD Bro builds upon the solid foundation of VaultMate with specific enhancements for power users:
 
 ### ✨ New Functionalities
 *   **📝 Memos Widget**: A dedicated widget to view and quickly capture thoughts.
