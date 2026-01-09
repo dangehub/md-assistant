@@ -202,7 +202,7 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
       fileName = p.basenameWithoutExtension(fileName);
       bool matchesQuery =
           description.toLowerCase().contains(searchQuery.toLowerCase()) ||
-              (viewMode == ViewMode.grouped &&
+              (viewMode == ViewMode.file &&
                   fileName.toLowerCase().contains(searchQuery.toLowerCase()));
 
       // 4. Tags

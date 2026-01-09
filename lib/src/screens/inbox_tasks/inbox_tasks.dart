@@ -237,8 +237,8 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
                 ViewMode getNextViewMode(ViewMode current) {
                   switch (current) {
                     case ViewMode.list:
-                      return ViewMode.grouped;
-                    case ViewMode.grouped:
+                      return ViewMode.file;
+                    case ViewMode.file:
                       return ViewMode.calendar;
                     case ViewMode.calendar:
                       return ViewMode.list;
@@ -249,7 +249,7 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
                   switch (mode) {
                     case ViewMode.list:
                       return Icons.list;
-                    case ViewMode.grouped:
+                    case ViewMode.file:
                       return Icons.folder;
                     case ViewMode.calendar:
                       return Icons.calendar_month;
@@ -437,7 +437,7 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
     }
 
     // 2. Check Legacy ViewMode (File Grouping)
-    if (_inboxTaskCubit.viewMode == ViewMode.grouped) {
+    if (_inboxTaskCubit.viewMode == ViewMode.file) {
       return _createGroupedViews(
           tasks, context, highlightedText, GroupByField.filePath);
     }

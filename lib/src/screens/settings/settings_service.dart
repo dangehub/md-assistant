@@ -4,7 +4,7 @@ import 'package:obsi/src/screens/notes_widget_config/cubit/notes_widget_config_c
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum ViewMode {
-  grouped,
+  file,
   list,
   calendar,
 }
@@ -94,11 +94,11 @@ class SettingsService {
     if (viewModeString != null) {
       return ViewMode.values.firstWhere(
         (e) => e.toString() == viewModeString,
-        orElse: () => ViewMode.grouped, // Default value
+        orElse: () => ViewMode.list, // Default value
       );
     }
 
-    return ViewMode.grouped;
+    return ViewMode.list;
   }
 
   Future<SortMode> sortMode() async {

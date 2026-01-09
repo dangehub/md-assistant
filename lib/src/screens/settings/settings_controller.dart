@@ -162,7 +162,7 @@ class SettingsController with ChangeNotifier {
   String? _dateTemplate;
   //DateTime? _notificationTime;
   DateTime? _zeroDate;
-  ViewMode _viewMode = ViewMode.grouped;
+  ViewMode _viewMode = ViewMode.list;
   SortMode _sortMode = SortMode.none;
   String? _globalTaskFilter;
   int _rateDialogCounter = 0;
