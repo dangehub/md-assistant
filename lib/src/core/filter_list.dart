@@ -154,7 +154,7 @@ class FilterList {
 
   bool matches(Task task) {
     if (type == FilterListType.staticList) {
-      return false; // Not implemented yet without Task IDs
+      return false;
     }
     return filter?.matches(task) ?? true;
   }
@@ -197,45 +197,178 @@ class FilterList {
             : TaskCompletionAction.keep,
       );
 
+  // ===================== Five Default Filters =====================
+
   static FilterList upcoming() => FilterList(
-      id: "upcoming",
-      name: "Upcoming",
-      icon: Icons.calendar_today,
-      type: FilterListType.preset,
-      filter: TaskFilter(
-          scheduledDateFilter: DateFilterType.beforeDate,
-          dueDateFilter: DateFilterType.beforeDate,
-          relativeEnd: 14,
-          inheritDate: false,
-          useOrLogic: true));
+        id: "upcoming",
+        name: "📅 upcoming",
+        icon: Icons.calendar_today,
+        type: FilterListType.preset,
+        filter: TaskFilter(
+          inheritDate: true,
+          filterRules: FilterRules(
+            groupMode: ConditionCombineMode.all,
+            groups: [
+              FilterConditionGroup(
+                mode: ConditionCombineMode.all,
+                conditions: [
+                  const FilterCondition(
+                    field: FilterField.status,
+                    statusValue: StatusFilterType.todo,
+                  ),
+                ],
+              ),
+              FilterConditionGroup(
+                mode: ConditionCombineMode.any,
+                conditions: [
+                  const FilterCondition(
+                    field: FilterField.scheduledDate,
+                    dateOperator: DateOperator.isInNextDays,
+                    intValue: 14,
+                  ),
+                  const FilterCondition(
+                    field: FilterField.dueDate,
+                    dateOperator: DateOperator.isInNextDays,
+                    intValue: 14,
+                  ),
+                  const FilterCondition(
+                    field: FilterField.scheduledDate,
+                    dateOperator: DateOperator.isBeforeToday,
+                  ),
+                  const FilterCondition(
+                    field: FilterField.dueDate,
+                    dateOperator: DateOperator.isBeforeToday,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        sortRules: [
+          SortRule(
+              field: SortField.scheduledDate,
+              direction: SortDirection.descending),
+        ],
+      );
+
+  static FilterList today() => FilterList(
+        id: "today",
+        name: "📆 today",
+        icon: Icons.today,
+        type: FilterListType.preset,
+        filter: TaskFilter(
+          inheritDate: true,
+          filterRules: FilterRules(
+            groupMode: ConditionCombineMode.all,
+            groups: [
+              FilterConditionGroup(
+                mode: ConditionCombineMode.all,
+                conditions: [
+                  const FilterCondition(
+                    field: FilterField.status,
+                    statusValue: StatusFilterType.todo,
+                  ),
+                ],
+              ),
+              FilterConditionGroup(
+                mode: ConditionCombineMode.any,
+                conditions: [
+                  const FilterCondition(
+                    field: FilterField.scheduledDate,
+                    dateOperator: DateOperator.isToday,
+                  ),
+                  const FilterCondition(
+                    field: FilterField.dueDate,
+                    dateOperator: DateOperator.isToday,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        sortRules: [
+          SortRule(
+              field: SortField.scheduledDate,
+              direction: SortDirection.descending),
+        ],
+      );
 
   static FilterList inbox() => FilterList(
-      id: "inbox",
-      name: "Inbox",
-      icon: Icons.inbox,
-      type: FilterListType.preset,
-      filter: TaskFilter(
-          scheduledDateFilter: DateFilterType.noDate,
-          dueDateFilter: DateFilterType.noDate,
-          inheritDate: false, // Inbox 默认不继承文件名日期，保持“收件箱”纯净？
-          // 用户说“日记日期继承...可以自由决定某个筛选是否启用”。
-          // 默认 Global 是开启的。如果我这里设为 false, 那 Inbox 就看不到继承日期的任务了（视为无日期，所以看得到？）
-          // 继承日期 ==> 有日期。
-          // Inbox logic: noDate.
-          // 如果 inheritDate=true (默认): 从文件名继承日期 -> 变为有日期 -> Inbox 排除。
-          // 如果 inheritDate=false: 忽略继承日期 -> 无日期 -> Inbox 包含。
-          // 逻辑上，Inbox 应该包含那些“还没处理”的任务。如果文件名给了日期，它就“被处理”到那一天了。
-          // 但如果用户想在 Inbox 里看到所有“正文没写日期”的任务，即使在日记文件里？
-          // 通常 Inbox = No Date.
-          // 暂时保持默认 true (继承)，这样“日记里的任务”会自动归档到该日记日期，不在 Inbox 显示。
-          useOrLogic: false));
+        id: "inbox",
+        name: "📥 inbox",
+        icon: Icons.inbox,
+        type: FilterListType.preset,
+        filter: TaskFilter(
+          inheritDate: false,
+          filterRules: FilterRules(
+            groupMode: ConditionCombineMode.all,
+            groups: [
+              FilterConditionGroup(
+                mode: ConditionCombineMode.all,
+                conditions: [
+                  const FilterCondition(
+                    field: FilterField.status,
+                    statusValue: StatusFilterType.todo,
+                  ),
+                  const FilterCondition(
+                    field: FilterField.scheduledDate,
+                    dateOperator: DateOperator.isEmpty,
+                  ),
+                  const FilterCondition(
+                    field: FilterField.dueDate,
+                    dateOperator: DateOperator.isEmpty,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        sortRules: [
+          SortRule(
+              field: SortField.createdDate,
+              direction: SortDirection.descending),
+        ],
+      );
+
+  static FilterList completed() => FilterList(
+        id: "completed",
+        name: "✅ completed",
+        icon: Icons.done_all,
+        type: FilterListType.preset,
+        filter: TaskFilter(
+          filterRules: FilterRules(
+            groupMode: ConditionCombineMode.all,
+            groups: [
+              FilterConditionGroup(
+                mode: ConditionCombineMode.all,
+                conditions: [
+                  const FilterCondition(
+                    field: FilterField.status,
+                    statusValue: StatusFilterType.done,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        sortRules: [
+          SortRule(
+              field: SortField.dueDate, direction: SortDirection.descending),
+        ],
+      );
 
   static FilterList all() => FilterList(
-      id: "all",
-      name: "All",
-      icon: Icons.list,
-      type: FilterListType.preset,
-      filter: TaskFilter(
-          scheduledDateFilter: DateFilterType.none,
-          dueDateFilter: DateFilterType.none));
+        id: "all",
+        name: "📋 all",
+        icon: Icons.list,
+        type: FilterListType.preset,
+        filter: TaskFilter(
+            // No filterRules means match all tasks
+            ),
+        sortRules: [
+          SortRule(
+              field: SortField.scheduledDate,
+              direction: SortDirection.descending),
+        ],
+      );
 }

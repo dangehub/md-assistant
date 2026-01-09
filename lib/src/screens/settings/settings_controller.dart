@@ -283,40 +283,48 @@ class SettingsController with ChangeNotifier {
       }
       _filters = uniqueFilters.values.toList();
 
-      // Migration: Remove legacy "recent" or old "upcoming" filters if they exist in persistence
-      // so that the new code-based "upcoming" (with new logic) takes precedence.
-      // We check if the user *manually* modified them? Hard to tell.
-      // For now, we force update "upcoming" by removing any persisted version that might be old.
-      // But wait, if user customized it, we loose changes.
-      // User complaint: "Why using Future 7 Days?" -> they want the new default.
-      // So we will remove 'recent' and 'filter_upcoming' (if old ID used) from the _filters list
-      // IF they match the old default logic (nextDays=7).
-      // Simpler: Just ensure we use the fresh `FilterList.upcoming()` if the ID matches.
-      // The `uniqueFilters` logic above prioritizes `loadedFilters` (persistence).
-      // We want to prioritize `_createDefaultFilters()` for built-ins?
-      // No, usually user overrides built-ins.
-      // But here we changed the definition of built-in.
-      // Let's explicitly remove 'recent' (old ID) and ensure 'upcoming' is fresh.
-      _filters.removeWhere((f) => f.id == 'recent'); // Remove old ID completely
+      // Migration: Refresh all 5 default preset filters to get new names, icons, order
+      // This ensures emoji names (📅 upcoming, 📆 today, 📥 inbox, etc.) are applied
+      // and filterRules are properly set from the factory methods.
+      final defaultFilterIds = [
+        // New lowercase IDs
+        'upcoming',
+        'today',
+        'inbox',
+        'completed',
+        'all',
+        // Legacy capitalized IDs (old app versions)
+        'Inbox',
+        'All',
+        'Today',
+        'Completed',
+        'Upcoming',
+        // Other legacy IDs
+        'recent',
+        'filter_upcoming',
+        'filter_inbox',
+        'filter_all',
+        'filter_today',
+        'filter_completed',
+      ];
 
-      // Ensure 'upcoming' uses the new logic by finding it and replacing it?
-      // Or by ensuring it wasn't in loadedFilters?
-      // Let's remove 'upcoming' from loaded filters if it looks like the old one?
-      // Or just remove it to force reset to new default?
-      // Let's remove it to force reset.
-      // NOTE: This resets user customization on 'upcoming' too.
-      // Given the user request, this is desired.
-      _filters.removeWhere((f) => f.id == 'upcoming');
-      _filters.add(FilterList.upcoming()); // Add fresh
+      // Remove old versions of default filters (both lowercase and capitalized)
+      _filters.removeWhere((f) => defaultFilterIds.contains(f.id));
 
-      // Deduplicate again just in case
+      // Add fresh default filters at the beginning in correct order
+      final freshDefaults = _createDefaultFilters();
+      _filters = [...freshDefaults, ..._filters];
+
+      // Deduplicate by ID (freshDefaults take precedence)
       final uniqueFilters2 = <String, FilterList>{};
       for (var f in _filters) {
-        uniqueFilters2[f.id] = f;
+        if (!uniqueFilters2.containsKey(f.id)) {
+          uniqueFilters2[f.id] = f;
+        }
       }
       _filters = uniqueFilters2.values.toList();
 
-      // If we made changes (e.g. removed duplicates), save them
+      // If we made changes, save them
       if (_filters.length != mergedFilters.length || !hasInbox) {
         await _saveFilters();
       }
@@ -575,27 +583,11 @@ class SettingsController with ChangeNotifier {
 
   List<FilterList> _createDefaultFilters() {
     return [
+      FilterList.upcoming(),
+      FilterList.today(),
       FilterList.inbox(),
-      FilterList.all(), // Added All
-      // FilterList.today(), // We don't have a helper for today() in FilterList yet?
-      // Let's use manual construction for now or add helper later.
-      FilterList(
-        id: 'filter_today',
-        name: '📅 Today',
-        icon: Icons.today,
-        type: FilterListType.builtin,
-        filter: TaskFilter.todayFilter(),
-        taskIds: [],
-      ),
-      FilterList.upcoming(), // Use the new helper!
-      FilterList(
-        id: 'filter_completed',
-        name: '✅ Completed',
-        icon: Icons.done_all,
-        type: FilterListType.builtin,
-        filter: TaskFilter(statusFilter: StatusFilterType.done),
-        taskIds: [],
-      ),
+      FilterList.completed(),
+      FilterList.all(),
     ];
   }
 

@@ -39,6 +39,14 @@ class _FilterEditorScreenState extends State<FilterEditorScreen> {
   List<SortRule> _sortRules = [];
   GroupByField _groupBy = GroupByField.none;
 
+  // New DateCondition-based filters (legacy, keeping for compatibility)
+  DateCondition _scheduledCondition = const DateCondition();
+  DateCondition _dueCondition = const DateCondition();
+
+  // New TaskForge multi-condition system
+  ConditionCombineMode _groupMode = ConditionCombineMode.all;
+  List<FilterConditionGroup> _conditionGroups = [];
+
   // New Task Defaults
   List<String> _defaultTags = [];
   DatePreset _defaultDueDate = const DatePreset();
@@ -77,6 +85,18 @@ class _FilterEditorScreenState extends State<FilterEditorScreen> {
       }
       _sortRules = List.from(f.sortRules);
       _groupBy = f.groupBy;
+
+      // Load new DateCondition fields
+      if (f.filter != null) {
+        _scheduledCondition = f.filter!.scheduledCondition;
+        _dueCondition = f.filter!.dueCondition;
+
+        // Load filterRules if present
+        if (f.filter!.filterRules != null) {
+          _groupMode = f.filter!.filterRules!.groupMode;
+          _conditionGroups = List.from(f.filter!.filterRules!.groups);
+        }
+      }
 
       if (f.newTaskDefaults != null) {
         _defaultTags = List.from(f.newTaskDefaults!.tags);
@@ -140,6 +160,299 @@ class _FilterEditorScreenState extends State<FilterEditorScreen> {
     }
   }
 
+  // ==================== TaskForge Condition Group Helpers ====================
+
+  void _addConditionGroup() {
+    setState(() {
+      _conditionGroups.add(FilterConditionGroup(
+        mode: ConditionCombineMode.all,
+        conditions: [],
+      ));
+    });
+  }
+
+  void _removeConditionGroup(int groupIndex) {
+    setState(() {
+      _conditionGroups.removeAt(groupIndex);
+    });
+  }
+
+  void _addConditionToGroup(int groupIndex) {
+    setState(() {
+      final group = _conditionGroups[groupIndex];
+      final newConditions = List<FilterCondition>.from(group.conditions)
+        ..add(const FilterCondition(field: FilterField.status));
+      _conditionGroups[groupIndex] = FilterConditionGroup(
+        mode: group.mode,
+        conditions: newConditions,
+      );
+    });
+  }
+
+  void _removeConditionFromGroup(int groupIndex, int condIndex) {
+    setState(() {
+      final group = _conditionGroups[groupIndex];
+      final newConditions = List<FilterCondition>.from(group.conditions)
+        ..removeAt(condIndex);
+      _conditionGroups[groupIndex] = FilterConditionGroup(
+        mode: group.mode,
+        conditions: newConditions,
+      );
+    });
+  }
+
+  void _updateConditionInGroup(
+      int groupIndex, int condIndex, FilterCondition newCond) {
+    setState(() {
+      final group = _conditionGroups[groupIndex];
+      final newConditions = List<FilterCondition>.from(group.conditions);
+      newConditions[condIndex] = newCond;
+      _conditionGroups[groupIndex] = FilterConditionGroup(
+        mode: group.mode,
+        conditions: newConditions,
+      );
+    });
+  }
+
+  void _setGroupMode(int groupIndex, ConditionCombineMode mode) {
+    setState(() {
+      final group = _conditionGroups[groupIndex];
+      _conditionGroups[groupIndex] = FilterConditionGroup(
+        mode: mode,
+        conditions: group.conditions,
+      );
+    });
+  }
+
+  Widget _buildConditionGroup(int groupIndex, FilterConditionGroup group) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: Colors.grey.shade100,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('Match '),
+                DropdownButton<ConditionCombineMode>(
+                  value: group.mode,
+                  items: ConditionCombineMode.values
+                      .map((m) => DropdownMenuItem(
+                            value: m,
+                            child: Text(
+                                m == ConditionCombineMode.all ? 'ALL' : 'ANY'),
+                          ))
+                      .toList(),
+                  onChanged: (val) {
+                    if (val != null) _setGroupMode(groupIndex, val);
+                  },
+                ),
+                const Text(' conditions'),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => _removeConditionGroup(groupIndex),
+                  icon: const Icon(Icons.close, size: 18),
+                ),
+              ],
+            ),
+            ...group.conditions.asMap().entries.map((entry) {
+              final condIndex = entry.key;
+              final cond = entry.value;
+              return _buildConditionRow(groupIndex, condIndex, cond);
+            }),
+            TextButton.icon(
+              onPressed: () => _addConditionToGroup(groupIndex),
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Add condition'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConditionRow(
+      int groupIndex, int condIndex, FilterCondition cond) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Wrap(
+        spacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          // Field selector
+          DropdownButton<FilterField>(
+            value: cond.field,
+            items: FilterField.values
+                .map((f) => DropdownMenuItem(value: f, child: Text(f.name)))
+                .toList(),
+            onChanged: (val) {
+              if (val != null) {
+                _updateConditionInGroup(
+                    groupIndex, condIndex, FilterCondition(field: val));
+              }
+            },
+          ),
+          // Operator selector (for date fields)
+          if (cond.field == FilterField.scheduledDate ||
+              cond.field == FilterField.dueDate)
+            DropdownButton<DateOperator>(
+              value: cond.dateOperator,
+              items: DateOperator.values
+                  .map(
+                      (op) => DropdownMenuItem(value: op, child: Text(op.name)))
+                  .toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  _updateConditionInGroup(
+                      groupIndex,
+                      condIndex,
+                      FilterCondition(
+                        field: cond.field,
+                        dateOperator: val,
+                        intValue: cond.intValue,
+                        dateValue: cond.dateValue,
+                      ));
+                }
+              },
+            ),
+          // Status selector
+          if (cond.field == FilterField.status)
+            DropdownButton<StatusFilterType>(
+              value: cond.statusValue ?? StatusFilterType.all,
+              items: StatusFilterType.values
+                  .map((s) => DropdownMenuItem(value: s, child: Text(s.name)))
+                  .toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  _updateConditionInGroup(groupIndex, condIndex,
+                      FilterCondition(field: cond.field, statusValue: val));
+                }
+              },
+            ),
+          // Days input for isInNextDays/isInPrevDays
+          if ((cond.field == FilterField.scheduledDate ||
+                  cond.field == FilterField.dueDate) &&
+              (cond.dateOperator == DateOperator.isInNextDays ||
+                  cond.dateOperator == DateOperator.isInPrevDays))
+            SizedBox(
+              width: 60,
+              child: TextField(
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(hintText: 'Days'),
+                controller: TextEditingController(
+                    text: cond.intValue?.toString() ?? '7'),
+                onChanged: (val) {
+                  final days = int.tryParse(val);
+                  _updateConditionInGroup(
+                      groupIndex,
+                      condIndex,
+                      FilterCondition(
+                        field: cond.field,
+                        dateOperator: cond.dateOperator,
+                        intValue: days,
+                      ));
+                },
+              ),
+            ),
+          // Date picker for is_, isNot, isBefore, isAfter
+          if ((cond.field == FilterField.scheduledDate ||
+                  cond.field == FilterField.dueDate) &&
+              (cond.dateOperator == DateOperator.is_ ||
+                  cond.dateOperator == DateOperator.isNot ||
+                  cond.dateOperator == DateOperator.isBefore ||
+                  cond.dateOperator == DateOperator.isAfter))
+            TextButton(
+              onPressed: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: cond.dateValue ?? DateTime.now(),
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime(2100),
+                );
+                if (picked != null) {
+                  _updateConditionInGroup(
+                      groupIndex,
+                      condIndex,
+                      FilterCondition(
+                        field: cond.field,
+                        dateOperator: cond.dateOperator,
+                        dateValue: picked,
+                      ));
+                }
+              },
+              child: Text(cond.dateValue != null
+                  ? DateFormat('yyyy-MM-dd').format(cond.dateValue!)
+                  : 'Select Date'),
+            ),
+          // Tag input
+          if (cond.field == FilterField.tag)
+            SizedBox(
+              width: 100,
+              child: TextField(
+                decoration: const InputDecoration(hintText: 'Tag'),
+                controller: TextEditingController(text: cond.stringValue ?? ''),
+                onChanged: (val) {
+                  _updateConditionInGroup(
+                      groupIndex,
+                      condIndex,
+                      FilterCondition(
+                        field: cond.field,
+                        stringValue: val,
+                      ));
+                },
+              ),
+            ),
+          // Path input
+          if (cond.field == FilterField.path)
+            SizedBox(
+              width: 120,
+              child: TextField(
+                decoration: const InputDecoration(hintText: 'Path'),
+                controller: TextEditingController(text: cond.stringValue ?? ''),
+                onChanged: (val) {
+                  _updateConditionInGroup(
+                      groupIndex,
+                      condIndex,
+                      FilterCondition(
+                        field: cond.field,
+                        stringValue: val,
+                      ));
+                },
+              ),
+            ),
+          // Priority input (int)
+          if (cond.field == FilterField.priority)
+            SizedBox(
+              width: 60,
+              child: TextField(
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(hintText: '1-5'),
+                controller: TextEditingController(
+                    text: cond.intValue?.toString() ?? ''),
+                onChanged: (val) {
+                  final priority = int.tryParse(val);
+                  _updateConditionInGroup(
+                      groupIndex,
+                      condIndex,
+                      FilterCondition(
+                        field: cond.field,
+                        intValue: priority,
+                      ));
+                },
+              ),
+            ),
+          // Remove button
+          IconButton(
+            onPressed: () => _removeConditionFromGroup(groupIndex, condIndex),
+            icon: const Icon(Icons.close, size: 16, color: Colors.red),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _save() {
     if (_nameController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -166,6 +479,11 @@ class _FilterEditorScreenState extends State<FilterEditorScreen> {
       relativeStart: _relativeStart,
       relativeEnd: _relativeEnd,
       weekStart: _weekStart,
+      scheduledCondition: _scheduledCondition,
+      dueCondition: _dueCondition,
+      filterRules: _conditionGroups.isNotEmpty
+          ? FilterRules(groupMode: _groupMode, groups: _conditionGroups)
+          : null,
     );
 
     final filterList = FilterList(
@@ -241,181 +559,61 @@ class _FilterEditorScreenState extends State<FilterEditorScreen> {
           ),
           const Divider(height: 32),
 
-          // Date Filter
-          const Text('日期筛选 (Scheduled)',
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          DropdownButton<DateFilterType>(
-            isExpanded: true,
-            value: _scheduledDateFilter,
-            items: _buildDropdownItems(_scheduledDateFilter),
-            onChanged: (val) {
-              if (val != null) setState(() => _scheduledDateFilter = val);
-            },
+          // ============== TaskForge-style Multi-Condition Groups ==============
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text('Filter Conditions',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 16)),
+                      const Spacer(),
+                      const Text('Match: '),
+                      DropdownButton<ConditionCombineMode>(
+                        value: _groupMode,
+                        items: ConditionCombineMode.values
+                            .map((m) => DropdownMenuItem(
+                                  value: m,
+                                  child: Text(m == ConditionCombineMode.all
+                                      ? 'ALL'
+                                      : 'ANY'),
+                                ))
+                            .toList(),
+                        onChanged: (val) {
+                          if (val != null) setState(() => _groupMode = val);
+                        },
+                      ),
+                    ],
+                  ),
+                  const Divider(),
+                  ..._conditionGroups.asMap().entries.map((entry) {
+                    final groupIndex = entry.key;
+                    final group = entry.value;
+                    return _buildConditionGroup(groupIndex, group);
+                  }),
+                  TextButton.icon(
+                    onPressed: _addConditionGroup,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Filter Group'),
+                  ),
+                ],
+              ),
+            ),
           ),
-          if (_scheduledDateFilter == DateFilterType.thisWeek)
-            Row(
-              children: [
-                const Text("周起始日: "),
-                const SizedBox(width: 8),
-                DropdownButton<int>(
-                  value: _weekStart,
-                  items: const [
-                    DropdownMenuItem(value: 1, child: Text("周一")),
-                    DropdownMenuItem(value: 7, child: Text("周日")),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) setState(() => _weekStart = val);
-                  },
-                ),
-              ],
-            ),
-          if (_scheduledDateFilter == DateFilterType.relative)
-            _buildRelativeDateInputs(
-                _relativeStart,
-                _relativeEnd,
-                (start, end) => setState(() {
-                      _relativeStart = start;
-                      _relativeEnd = end;
-                    })),
-          if (_scheduledDateFilter == DateFilterType.nextDays)
-            // Deprecated nextDays UI, convert to Relative?
-            // For now keep slider for backward compat if user selects it (though hidden from dropdown?)
-            // I hid nextNDays, kept nextDays.
-            // If user wants "Future X Days", they can use Relative (0 to X).
-            // I should prob show nextDays slider if they insist on using legacy type.
-            Row(
-              children: [
-                const Text("天数: "),
-                Expanded(
-                  child: Slider(
-                      value: _nextDays.toDouble(),
-                      min: 1,
-                      max: 30,
-                      divisions: 29,
-                      label: "$_nextDays",
-                      onChanged: (val) =>
-                          setState(() => _nextDays = val.toInt())),
-                ),
-                Text("$_nextDays 天"),
-              ],
-            ),
-          if (_scheduledDateFilter == DateFilterType.custom)
-            _buildCustomDateRangePicker(
-              _customScheduledStart,
-              _customScheduledEnd,
-              (start, end) {
-                setState(() {
-                  _customScheduledStart = start;
-                  _customScheduledEnd = end;
-                });
-              },
-            ),
-          if (_scheduledDateFilter == DateFilterType.beforeDate)
-            _buildBeforeDateUI(
-              _customScheduledEnd,
-              _relativeEnd,
-              (customDate, relativeDays) {
-                setState(() {
-                  _customScheduledEnd = customDate;
-                  _relativeEnd = relativeDays;
-                  _customScheduledStart = null;
-                  _relativeStart = null; // Clear others
-                });
-              },
-            ),
-
-          const SizedBox(height: 10),
-          SwitchListTile(
-            title: const Text('从文件名继承日期'),
-            subtitle: const Text('如果启用，无日期的任务将使用文件名中的日期'),
-            value: _inheritDate,
-            onChanged: (val) => setState(() => _inheritDate = val),
-          ),
-
-          const SizedBox(height: 10),
-          const Text('日期筛选 (Due Date)',
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          DropdownButton<DateFilterType>(
-            isExpanded: true,
-            value: _dueDateFilter,
-            items: _buildDropdownItems(_dueDateFilter),
-            onChanged: (val) {
-              if (val != null) setState(() => _dueDateFilter = val);
-            },
-          ),
-          if (_dueDateFilter == DateFilterType.thisWeek)
-            Row(
-              children: [
-                const Text("周起始日: "),
-                const SizedBox(width: 8),
-                DropdownButton<int>(
-                  value: _weekStart,
-                  items: const [
-                    DropdownMenuItem(value: 1, child: Text("周一")),
-                    DropdownMenuItem(value: 7, child: Text("周日")),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) setState(() => _weekStart = val);
-                  },
-                ),
-              ],
-            ),
-          if (_dueDateFilter == DateFilterType.relative)
-            _buildRelativeDateInputs(
-                _relativeStart, // Usually separate for due/scheduled?
-                // TaskFilter has single relativeStart/End fields?
-                // Ah, TaskFilter has scheduledDateFilter AND dueDateFilter.
-                // But only ONE relativeStart/End field set!
-                // This is a flaw in my TaskFilter design change.
-                // TaskFilter should have scheduledRelativeStart/End and dueRelativeStart/End if they can be different.
-                // Or I assume filters usually use one or the other?
-                // Currently TaskFilter has:
-                // customScheduledStart/End AND customDueStart/End.
-                // I added relativeStart/End ONCE.
-                // I should have added scheduledRelativeStart... etc.
-                // I need to fix TaskFilter first!
-                _relativeEnd,
-                (start, end) => setState(() {
-                      _relativeStart = start;
-                      _relativeEnd = end;
-                    })),
-          if (_dueDateFilter == DateFilterType.custom)
-            _buildCustomDateRangePicker(
-              _customDueStart,
-              _customDueEnd,
-              (start, end) {
-                setState(() {
-                  _customDueStart = start;
-                  _customDueEnd = end;
-                });
-              },
-            ),
-          if (_dueDateFilter == DateFilterType.beforeDate)
-            _buildBeforeDateUI(
-              _customDueEnd,
-              _relativeEnd, // Note: TaskFilter currently shares relativeEnd. This is a potential bug if both use relative.
-              // Logic check: TaskFilter has single relativeEnd.
-              // If user sets Scheduled=Relative AND Due=Relative, they clash.
-              // But standard usage usually filters one.
-              // We will proceed. Ideally TaskFilter needs separate fields.
-              (customDate, relativeDays) {
-                setState(() {
-                  _customDueEnd = customDate;
-                  _relativeEnd = relativeDays;
-                  _customDueStart = null;
-                  _relativeStart = null;
-                });
-              },
-            ),
-
+          const SizedBox(height: 16),
           CheckboxListTile(
-              title: const Text("Scheduled 或 Due 满足任一即可 (OR 逻辑)"),
-              value: _useOrLogic,
-              onChanged: (val) => setState(() => _useOrLogic = val!)),
+              title: const Text("Inherit Date from Filename"),
+              value: _inheritDate,
+              onChanged: (val) => setState(() => _inheritDate = val!)),
           const Divider(height: 32),
 
           // Tags
-          const Text('必须包含标签', style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text('Tags (Include)',
+              style: TextStyle(fontWeight: FontWeight.bold)),
           Wrap(
             spacing: 8,
             children: _tags
