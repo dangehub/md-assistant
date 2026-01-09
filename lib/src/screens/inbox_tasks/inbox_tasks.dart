@@ -594,6 +594,8 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
         rightButtonIcon: isScheduledToday
             ? Icons.remove_circle_outline
             : Icons.add_circle_outline,
+        showInferredDate:
+            _inboxTaskCubit.currentFilterList.filter?.inheritDate ?? true,
         startWorkflowPressed: task.tags.contains("obsi_ai")
             ? () => _startWorkflowPressed(context, task)
             : null);

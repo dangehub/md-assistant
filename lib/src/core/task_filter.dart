@@ -159,7 +159,7 @@ class FilterCondition {
   });
 
   /// Check if a task matches this condition
-  bool matches(Task task) {
+  bool matches(Task task, {bool inheritDate = true}) {
     switch (field) {
       case FilterField.status:
         if (statusValue == null || statusValue == StatusFilterType.all) {
@@ -179,7 +179,12 @@ class FilterCondition {
           date: dateValue,
           days: intValue,
         );
-        return condition.matches(task.scheduled);
+        var dateToCheck = task.scheduled;
+        // If inheritDate is false, ignore inferred scheduled dates
+        if (task.isScheduledDateInferred && !inheritDate) {
+          dateToCheck = null;
+        }
+        return condition.matches(dateToCheck);
 
       case FilterField.dueDate:
         final condition = DateCondition(
@@ -237,12 +242,12 @@ class FilterConditionGroup {
     this.conditions = const [],
   });
 
-  bool matches(Task task) {
+  bool matches(Task task, {bool inheritDate = true}) {
     if (conditions.isEmpty) return true;
     if (mode == ConditionCombineMode.all) {
-      return conditions.every((c) => c.matches(task));
+      return conditions.every((c) => c.matches(task, inheritDate: inheritDate));
     } else {
-      return conditions.any((c) => c.matches(task));
+      return conditions.any((c) => c.matches(task, inheritDate: inheritDate));
     }
   }
 
@@ -271,12 +276,12 @@ class FilterRules {
     this.groups = const [],
   });
 
-  bool matches(Task task) {
+  bool matches(Task task, {bool inheritDate = true}) {
     if (groups.isEmpty) return true;
     if (groupMode == ConditionCombineMode.all) {
-      return groups.every((g) => g.matches(task));
+      return groups.every((g) => g.matches(task, inheritDate: inheritDate));
     } else {
-      return groups.any((g) => g.matches(task));
+      return groups.any((g) => g.matches(task, inheritDate: inheritDate));
     }
   }
 
@@ -520,7 +525,7 @@ class TaskFilter {
   bool matches(Task task) {
     // 0. TaskForge multi-condition rules (highest priority)
     if (filterRules != null && filterRules!.groups.isNotEmpty) {
-      return filterRules!.matches(task);
+      return filterRules!.matches(task, inheritDate: inheritDate);
     }
 
     // 1. Status Filter

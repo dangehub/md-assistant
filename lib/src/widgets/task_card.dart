@@ -15,6 +15,7 @@ class TaskCard extends Card {
   final VoidCallback? startWorkflowPressed;
   final IconData? rightButtonIcon;
   final String? hightlightedText;
+  final bool showInferredDate;
 
   const TaskCard(this.task,
       {super.key,
@@ -23,7 +24,8 @@ class TaskCard extends Card {
       this.rightButtonPressed,
       this.editTaskPressed,
       this.startWorkflowPressed,
-      this.rightButtonIcon});
+      this.rightButtonIcon,
+      this.showInferredDate = true});
 
   @override
   Widget build(BuildContext context) {
@@ -134,15 +136,23 @@ class TaskCard extends Card {
     var subtitle = MarkdownTaskMarkers().getPriorityMarker(task.priority);
 
     if (task.scheduled != null) {
-      var scheduledTemplate = template;
-      if (task.scheduledTime) {
-        scheduledTemplate += " HH:mm";
+      // Check if we should show the scheduled date
+      bool shouldShowDate = true;
+      if (task.isScheduledDateInferred && !showInferredDate) {
+        shouldShowDate = false;
       }
-      subtitle +=
-          "\n${MarkdownTaskMarkers.scheduledDateMarker} ${DateFormat(scheduledTemplate).format(task.scheduled!)}";
-      if (task.recurrenceRule != null) {
+
+      if (shouldShowDate) {
+        var scheduledTemplate = template;
+        if (task.scheduledTime) {
+          scheduledTemplate += " HH:mm";
+        }
         subtitle +=
-            " ${MarkdownTaskMarkers.recurringDateMarker} ${task.recurrenceRule}";
+            "\n${MarkdownTaskMarkers.scheduledDateMarker} ${DateFormat(scheduledTemplate).format(task.scheduled!)}";
+        if (task.recurrenceRule != null) {
+          subtitle +=
+              " ${MarkdownTaskMarkers.recurringDateMarker} ${task.recurrenceRule}";
+        }
       }
     }
 
