@@ -40,6 +40,7 @@ class HomeWidgetHandler {
       var targetFilter = _getWidgetFilter(settings);
 
       var filteredTasks = tasks.where((t) => targetFilter.matches(t)).toList();
+      _sortTasks(filteredTasks, targetFilter);
       Logger().i(
           "Filtered widget tasks: ${filteredTasks.length} using filter: ${targetFilter.name}");
 
@@ -87,6 +88,7 @@ class HomeWidgetHandler {
       var targetFilter = _getWidgetFilter(settings);
       var tasks =
           taskManager.tasks.where((t) => targetFilter.matches(t)).toList();
+      _sortTasks(tasks, targetFilter);
       resultTask = _tasks2Json(tasks);
     } else {
       Logger().d('Vault directory is not set or empty. Using default tasks.');
@@ -118,5 +120,46 @@ class HomeWidgetHandler {
 
   static List<Map<String, dynamic>> _tasks2Json(List<Task> tasks) {
     return tasks.map((task) => task.toJsonMap()).toList();
+  }
+
+  static void _sortTasks(List<Task> tasks, FilterList filter) {
+    if (filter.sortRules.isNotEmpty) {
+      tasks.sort((a, b) {
+        for (var rule in filter.sortRules) {
+          int cmp = 0;
+          switch (rule.field) {
+            case SortField.alphabetical:
+              cmp = (a.description ?? "").compareTo(b.description ?? "");
+              break;
+            case SortField.dueDate:
+              cmp = _compareDates(a.due, b.due);
+              break;
+            case SortField.scheduledDate:
+              cmp = _compareDates(a.scheduled, b.scheduled);
+              break;
+            case SortField.createdDate:
+              cmp = _compareDates(a.created, b.created);
+              break;
+            case SortField.priority:
+              cmp = a.priority.index.compareTo(b.priority.index);
+              break;
+            case SortField.status:
+              cmp = a.status.index.compareTo(b.status.index);
+              break;
+          }
+          if (cmp != 0) {
+            return rule.direction == SortDirection.ascending ? cmp : -cmp;
+          }
+        }
+        return 0; // All rules equal
+      });
+    }
+  }
+
+  static int _compareDates(DateTime? a, DateTime? b) {
+    if (a == null && b == null) return 0;
+    if (a == null) return 1; // Null is "larger" -> End of list (for ASC)
+    if (b == null) return -1;
+    return a.compareTo(b);
   }
 }
