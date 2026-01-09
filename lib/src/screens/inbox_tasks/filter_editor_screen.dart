@@ -227,7 +227,9 @@ class _FilterEditorScreenState extends State<FilterEditorScreen> {
   Widget _buildConditionGroup(int groupIndex, FilterConditionGroup group) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      color: Colors.grey.shade100,
+      color: Theme.of(context).brightness == Brightness.dark
+          ? Colors.grey.shade900
+          : Colors.grey.shade100,
       child: Padding(
         padding: const EdgeInsets.all(8),
         child: Column(
