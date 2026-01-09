@@ -58,12 +58,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
               child: IntroductionScreen(
                 pages: [
                   PageViewModel(
-                    title: "VaultMate - Task Manager for Obsidian vault!",
+                    title: "MD Bro - Task Manager for Obsidian vault!",
                     bodyWidget: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                            "Your Obsidian tasks and notes at your fingertips.\n\nAdd the widgets to your home screen, then open VaultMate to refresh your tasks.",
+                            "Your Obsidian tasks and notes at your fingertips.\n\nAdd the widgets to your home screen, then open MD Bro to refresh your tasks.",
                             style: TextStyle(fontSize: 17),
                             textAlign: TextAlign.center),
                         _buildCheckbox()

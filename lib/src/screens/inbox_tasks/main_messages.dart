@@ -53,7 +53,7 @@ class MainMessages {
         try {
           final url = platform == TargetPlatform.iOS
               ? "https://apps.apple.com/app/id6740782775"
-              : "https://play.google.com/store/apps/details?id=com.scanworks.obsi";
+              : "https://play.google.com/store/apps/details?id=com.dangehub.mdbro";
 
           if (await canLaunchUrl(Uri.parse(url))) {
             launchUrl(Uri.parse(url));
@@ -91,7 +91,7 @@ class MainMessages {
           try {
             final url = platform == TargetPlatform.iOS
                 ? "https://apps.apple.com/app/id6740782775"
-                : "https://play.google.com/store/apps/details?id=com.scanworks.obsi";
+                : "https://play.google.com/store/apps/details?id=com.dangehub.mdbro";
 
             if (await canLaunchUrl(Uri.parse(url))) {
               launchUrl(Uri.parse(url));

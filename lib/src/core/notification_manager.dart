@@ -284,7 +284,7 @@ class NotificationManager {
       // Schedule the notification
       await _scheduleNotification(
         id: id, // Ensure the ID fits within 32-bit integer range
-        title: 'VaultMate',
+        title: 'MD Bro',
         body: text,
         scheduledDate: scheduledDate,
       );
@@ -349,7 +349,7 @@ class NotificationManager {
     // Schedule the daily recurring notification
     await _notificationPlugin.zonedSchedule(
       notificationId,
-      'VaultMate',
+      'MD Bro',
       body,
       tzScheduledDate,
       NotificationDetails(

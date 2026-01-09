@@ -3,12 +3,12 @@
     <uses-permission android:name="com.android.vending.BILLING" />
     
     <application
-        android:label="VaultMate"
+        android:label="MD Bro"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:requestLegacyExternalStorage="true">
         <activity
-            android:name="com.scanworks.obsi.MainActivity"
+            android:name="com.dangehub.mdbro.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@style/LaunchTheme"
@@ -36,9 +36,9 @@
             android:value="2" />
         <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
         <receiver
-            android:name="com.scanworks.obsi.ObsiWidgetReceiver"
+            android:name="com.dangehub.mdbro.ObsiWidgetReceiver"
             android:exported="false"
-            android:label="VaultMate Tasks">
+            android:label="MD Bro Tasks">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -47,9 +47,9 @@
                 android:resource="@xml/obsiditasks_widget_provider" />
         </receiver>
         <receiver
-            android:name="com.scanworks.obsi.NotesWidgetReceiver"
+            android:name="com.dangehub.mdbro.NotesWidgetReceiver"
             android:exported="false"
-            android:label="VaultMate Memos">
+            android:label="MD Bro Memos">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -58,15 +58,15 @@
                 android:resource="@xml/notes_widget_provider" />
         </receiver>
         <activity
-            android:name="com.scanworks.obsi.WidgetConfigureActivity"
+            android:name="com.dangehub.mdbro.WidgetConfigureActivity"
             android:exported="false"
-            android:label="VaultMate widget settings">
+            android:label="MD Bro widget settings">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>
         </activity>
         <activity
-            android:name="com.scanworks.obsi.MemoInputActivity"
+            android:name="com.dangehub.mdbro.MemoInputActivity"
             android:exported="false"
             android:theme="@android:style/Theme.Material.Light.Dialog.NoActionBar"
             android:excludeFromRecents="true"

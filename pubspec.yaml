@@ -1,5 +1,5 @@
 name: obsi
-description: VaultMate - task manager for Obsidian vault.
+description: MD Bro - task manager for Obsidian vault.
 publish_to: none
 version: 1.6.0+101
 environment:
@@ -52,8 +52,9 @@ flutter:
   assets:
     - assets/images/
 flutter_launcher_icons:
-  android: true
-  adaptive_icon_background: #6640C1
+  android: "ic_launcher"
+  adaptive_icon_background: "assets/images/icon.png"
+  adaptive_icon_foreground: "assets/images/transparent.png"
   ios: true
   remove_alpha_ios: true
   image_path: "assets/images/icon.png"

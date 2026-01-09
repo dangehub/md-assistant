@@ -1,6 +1,6 @@
 <div align="center">
 
-# [MD Assistant 🛡️](https://github.com/dangehub/md-assistant)
+# [MD Assistant 🛡️](https://github.com/dangehub/md-bro)
 ### An Enhanced Android Companion for Obsidian
 
 [![Platform](https://img.shields.io/badge/Platform-Flutter-02569B?logo=flutter)](https://flutter.dev)
@@ -48,8 +48,8 @@ This project is currently under active development.
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/dangehub/md-assistant.git
-    cd md-assistant
+    git clone https://github.com/dangehub/md-bro.git
+    cd md-bro
     ```
 
 2.  **Install dependencies:**

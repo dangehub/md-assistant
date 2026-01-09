@@ -426,7 +426,7 @@ class _SettingsViewState extends State<SettingsView> {
                   onTap: () {
                     _launchEmail(context);
                   },
-                  child: const Text("support@vaultmate.app",
+                  child: const Text("support@mdbro.app",
                       style: TextStyle(
                         color: Colors.blue,
                         fontSize: 16,
@@ -460,8 +460,8 @@ class _SettingsViewState extends State<SettingsView> {
   Future<void> _launchEmail(BuildContext context) async {
     final Uri emailUri = Uri(
       scheme: 'mailto',
-      path: "support@vaultmate.app",
-      query: 'subject=VaultMate', // Optional query parameters
+      path: "support@mdbro.app",
+      query: 'subject=MD Bro', // Optional query parameters
     );
     if (await canLaunchUrl(emailUri)) {
       await launchUrl(emailUri);

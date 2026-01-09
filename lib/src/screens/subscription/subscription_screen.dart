@@ -175,12 +175,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   Widget _buildPremiumFeatures() {
     final features = Platform.isIOS
         ? const [
-            'Support the development of VaultMate',
+            'Support the development of MD Bro',
             'Calendar view mode',
             'Future premium features',
           ]
         : const [
-            'Support the development of VaultMate',
+            'Support the development of MD Bro',
             'Adding task and open task from widget',
             'Calendar view mode',
             'Future premium features',
