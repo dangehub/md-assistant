@@ -201,7 +201,7 @@ class SettingsController with ChangeNotifier {
     return _vaultName!;
   }
 
-  String get tasksFile => _tasksFile ?? "obsi_tasks.md";
+  String get tasksFile => _tasksFile ?? "{{YYYY-MM-DD}}.md";
   String get dateTemplate => _dateTemplate ?? "yyyy-MM-dd";
   //DateTime? get notificationTime => _notificationTime;
   String get globalTaskFilter => _globalTaskFilter ?? "";
