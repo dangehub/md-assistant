@@ -205,7 +205,7 @@ class FilterList {
         icon: Icons.calendar_today,
         type: FilterListType.preset,
         filter: TaskFilter(
-          inheritDate: true,
+          inheritDate: false,
           filterRules: FilterRules(
             groupMode: ConditionCombineMode.all,
             groups: [
