@@ -4,6 +4,7 @@ import 'package:obsi/src/core/tasks/task_manager.dart';
 import 'package:obsi/src/screens/calendar/calendar_screen.dart'; // Import CalendarWidget
 import 'package:obsi/src/screens/inbox_tasks/file_view.dart';
 import 'package:obsi/src/screens/inbox_tasks/main_messages.dart';
+import 'package:intl/intl.dart';
 import 'package:obsi/src/screens/settings/settings_controller.dart';
 import 'package:obsi/src/core/tasks/task.dart';
 import 'package:obsi/src/screens/settings/settings_service.dart';
@@ -377,18 +378,36 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
       child: const Icon(Icons.add),
       onPressed: () {
         var settings = SettingsController.getInstance();
-        var resolvedTasksFile = VariableResolver.resolve(settings.tasksFile);
-        var createTasksPath =
-            p.join(settings.vaultDirectory!, resolvedTasksFile);
+        var currentFilter = _inboxTaskCubit.currentFilterList;
+        var defaults = currentFilter.newTaskDefaults;
 
-        // Determine default date based on current filter or today
-        // If "Inbox" (No Date) is selected, maybe default to NO date?
-        // If "Recent" or "All", default to Today.
-        DateTime? defaultScheduled;
-        if (_inboxTaskCubit.currentFilterList.id == 'inbox') {
-          defaultScheduled = null;
-        } else {
-          defaultScheduled = DateTime.now();
+        // 1. Resolve Path
+        String resolvedFile = VariableResolver.resolve(settings.tasksFile);
+        if (defaults?.filePath != null && defaults!.filePath!.isNotEmpty) {
+          resolvedFile = defaults!.filePath!;
+        }
+        var createTasksPath = p.join(settings.vaultDirectory!, resolvedFile);
+
+        // 2. Resolve Dates
+        DateTime? scheduled = _resolveDatePreset(defaults?.scheduledDate);
+        DateTime? due = _resolveDatePreset(defaults?.dueDate);
+
+        // Fallback for logic if no defaults set
+        bool defaultsSet = defaults?.scheduledDate != null &&
+            defaults!.scheduledDate!.type != DatePresetType.none;
+
+        if (!defaultsSet) {
+          if (currentFilter.id == 'inbox') {
+            scheduled = null;
+          } else {
+            scheduled = DateTime.now();
+          }
+        }
+
+        // 3. Resolve Tags
+        List<String> initialTags = [];
+        if (defaults?.tags != null) {
+          initialTags.addAll(defaults!.tags);
         }
 
         Navigator.push(
@@ -398,7 +417,10 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
                   create: (context) => TaskEditorCubit(
                       _inboxTaskCubit.taskManager,
                       task: Task("",
-                          created: DateTime.now(), scheduled: defaultScheduled),
+                          created: DateTime.now(),
+                          scheduled: scheduled,
+                          due: due,
+                          tags: initialTags),
                       createTasksPath: createTasksPath),
                   child: const TaskEditor()),
             ));
@@ -406,35 +428,142 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
     );
   }
 
-  List<Card> _createViewItems(
+  List<Widget> _createViewItems(
       BuildContext context, List<Task> tasks, String highlightedText) {
-    if (_inboxTaskCubit.viewMode == ViewMode.grouped) {
-      return _createFileViews(tasks, context, highlightedText);
+    // 1. Check FilterList GroupBy
+    final groupBy = _inboxTaskCubit.currentFilterList.groupBy;
+    if (groupBy != GroupByField.none) {
+      return _createGroupedViews(tasks, context, highlightedText, groupBy);
     }
+
+    // 2. Check Legacy ViewMode (File Grouping)
+    if (_inboxTaskCubit.viewMode == ViewMode.grouped) {
+      return _createGroupedViews(
+          tasks, context, highlightedText, GroupByField.filePath);
+    }
+
+    // 3. Flat List
     return tasks.map((task) {
       return _createTaskCard(context, task, highlightedText);
     }).toList();
   }
 
-  List<FileView> _createFileViews(
-      List<Task> tasks, BuildContext context, String highlightedText) {
-    List<FileView> fileViews = [];
-    List<TaskCard> fileTasks = [];
+  List<Widget> _createGroupedViews(List<Task> tasks, BuildContext context,
+      String highlightedText, GroupByField groupBy) {
+    // 1. Bucketize
+    Map<String, List<Task>> groups = {};
     for (var task in tasks) {
-      if (fileTasks.isNotEmpty &&
-          fileTasks[0].task.taskSource!.fileName == task.taskSource!.fileName) {
-        fileTasks.add(_createTaskCard(context, task, highlightedText));
-      } else {
-        fileTasks = [_createTaskCard(context, task, highlightedText)];
-        fileViews.add(FileView(
-          fileTasks,
-          highlightedText: highlightedText,
-          vaultName: SettingsController.getInstance().vaultName!,
-        ));
+      String key = _getGroupKey(task, groupBy);
+      if (!groups.containsKey(key)) {
+        groups[key] = [];
       }
+      groups[key]!.add(task);
     }
 
-    return fileViews;
+    // 2. Sort Keys
+    List<String> sortedKeys = groups.keys.toList();
+    // Sort logic depends on GroupByField
+    sortedKeys.sort((a, b) => _compareGroupKeys(a, b, groupBy));
+
+    // 3. Build Widgets
+    List<Widget> groupWidgets = [];
+    for (var key in sortedKeys) {
+      if (groups[key]!.isEmpty) continue;
+
+      // If grouping by FilePath, reuse FileView for better UX (link handling)
+      if (groupBy == GroupByField.filePath) {
+        groupWidgets.add(FileView(
+          groups[key]!
+              .map((t) => _createTaskCard(context, t, highlightedText))
+              .toList(),
+          highlightedText: highlightedText,
+          vaultName: SettingsController.getInstance().vaultName,
+        ));
+      } else {
+        // Generic Group View
+        groupWidgets.add(_buildGenericGroup(
+            key,
+            groups[key]!
+                .map((t) => _createTaskCard(context, t, highlightedText))
+                .toList(),
+            context));
+      }
+    }
+    return groupWidgets;
+  }
+
+  String _getGroupKey(Task task, GroupByField groupBy) {
+    switch (groupBy) {
+      case GroupByField.dueDate:
+        return _formatDateKey(task.due) ?? "No Due Date";
+      case GroupByField.scheduledDate:
+        // Use effective scheduled date
+        DateTime? date = task.scheduled;
+        // TODO: handle inferred? Assuming raw is fine or logic elsewhere handled it?
+        // Filter logic handles inferred. Display usually shows what's set.
+        return _formatDateKey(date) ?? "No Scheduled Date";
+      case GroupByField.filePath:
+        return task.taskSource?.fileName ?? "Unknown File";
+      case GroupByField.priority:
+        return task.priority.name.toUpperCase();
+      case GroupByField.status:
+        return task.status.name.toUpperCase();
+      case GroupByField.none:
+        return "All";
+    }
+  }
+
+  String? _formatDateKey(DateTime? date) {
+    if (date == null) return null;
+    return DateFormat('yyyy-MM-dd (EEE)').format(date);
+  }
+
+  int _compareGroupKeys(String a, String b, GroupByField groupBy) {
+    // Comparison logic
+    // Ideally we compare underlying values, but here we only have strings.
+    // For Dates (yyyy-MM-dd...), string compare works.
+    // For Priority, string compare (HIGH, LOW) is wrong.
+    // For Status, DONE, TODO... alphabetical?
+
+    if (groupBy == GroupByField.priority) {
+      // Map string back to index? Or custom order.
+      // Priority enum: lowest, low, normal, medium, high, highest.
+      // We might need to look up index.
+      int getPrioIndex(String s) =>
+          TaskPriority.values.indexWhere((e) => e.name.toUpperCase() == s);
+      // Descending priority?
+      return getPrioIndex(b).compareTo(getPrioIndex(a));
+    }
+    return a.compareTo(b);
+  }
+
+  Widget _buildGenericGroup(
+      String title, List<Widget> children, BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Text(
+              title,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ),
+          const Divider(height: 1),
+          ListView(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            children: children,
+          )
+        ],
+      ),
+    );
   }
 
   TaskCard _createTaskCard(
@@ -487,5 +616,19 @@ class InboxTasks extends StatelessWidget with WidgetsBindingObserver {
       context,
       MaterialPageRoute(builder: (context) => const FilterManagementScreen()),
     );
+  }
+
+  DateTime? _resolveDatePreset(DatePreset? preset) {
+    if (preset == null) return null;
+    switch (preset.type) {
+      case DatePresetType.none:
+        return null;
+      case DatePresetType.today:
+        return DateTime.now();
+      case DatePresetType.todayPlusDays:
+        return DateTime.now().add(Duration(days: preset.offsetDays ?? 0));
+      case DatePresetType.specificDate:
+        return preset.specificDate;
+    }
   }
 }

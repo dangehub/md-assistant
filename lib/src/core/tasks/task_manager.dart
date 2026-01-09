@@ -342,6 +342,26 @@ class TaskManager with ChangeNotifier {
     }
   }
 
+  Future deleteTask(Task task) async {
+    if (task.taskSource != null) {
+      await TaskSaver(storage).deleteTask(task);
+      _tasks.remove(task);
+      notifyListeners();
+    }
+  }
+
+  Future archiveTask(Task task, {String archivePath = "Archive.md"}) async {
+    if (task.taskSource != null) {
+      // 1. Delete from current source
+      await TaskSaver(storage).deleteTask(task);
+      _tasks.remove(task);
+
+      // 2. Add to archive
+      await saveTask(task, filePath: archivePath);
+      // saveTask handles notifying listeners
+    }
+  }
+
   Future saveTask(Task task, {String? filePath}) async {
     return await saveTasks([task], filePath: filePath);
   }

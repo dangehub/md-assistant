@@ -136,6 +136,7 @@ class Task implements Comparable<Task> {
     start,
     this.taskSource,
     recurranceRule,
+    List<String>? tags,
   })  : _status = status,
         _priority = priority,
         _created = created,
@@ -147,6 +148,9 @@ class Task implements Comparable<Task> {
         _scheduledTime = scheduledTime,
         _isScheduledDateInferred = isScheduledDateInferred,
         _recurrenceRule = recurranceRule {
+    if (tags != null) {
+      _tags.addAll(tags);
+    }
     _parseTags();
   }
 

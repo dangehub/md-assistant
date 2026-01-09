@@ -11,6 +11,121 @@ enum FilterListType {
   builtin,
 }
 
+enum SortField {
+  alphabetical,
+  dueDate,
+  scheduledDate,
+  createdDate,
+  priority,
+  status,
+}
+
+enum SortDirection {
+  ascending,
+  descending,
+}
+
+enum GroupByField {
+  none,
+  dueDate,
+  scheduledDate,
+  filePath,
+  priority,
+  status,
+}
+
+enum TaskCompletionAction {
+  keep,
+  delete,
+  archive,
+}
+
+enum DatePresetType {
+  none,
+  today,
+  todayPlusDays,
+  specificDate,
+}
+
+class DatePreset {
+  final DatePresetType type;
+  final int? offsetDays;
+  final DateTime? specificDate;
+
+  const DatePreset({
+    this.type = DatePresetType.none,
+    this.offsetDays,
+    this.specificDate,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'type': type.index,
+        'offsetDays': offsetDays,
+        'specificDate': specificDate?.toIso8601String(),
+      };
+
+  factory DatePreset.fromJson(Map<String, dynamic> json) => DatePreset(
+        type: DatePresetType.values[json['type']],
+        offsetDays: json['offsetDays'],
+        specificDate: json['specificDate'] != null
+            ? DateTime.parse(json['specificDate'])
+            : null,
+      );
+}
+
+class NewTaskDefaults {
+  final List<String> tags;
+  final DatePreset? dueDate;
+  final DatePreset? scheduledDate;
+  final String? filePath;
+
+  const NewTaskDefaults({
+    this.tags = const [],
+    this.dueDate,
+    this.scheduledDate,
+    this.filePath,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'tags': tags,
+        'dueDate': dueDate?.toJson(),
+        'scheduledDate': scheduledDate?.toJson(),
+        'filePath': filePath,
+      };
+
+  factory NewTaskDefaults.fromJson(Map<String, dynamic> json) =>
+      NewTaskDefaults(
+        tags: List<String>.from(json['tags'] ?? []),
+        dueDate: json['dueDate'] != null
+            ? DatePreset.fromJson(json['dueDate'])
+            : null,
+        scheduledDate: json['scheduledDate'] != null
+            ? DatePreset.fromJson(json['scheduledDate'])
+            : null,
+        filePath: json['filePath'],
+      );
+}
+
+class SortRule {
+  final SortField field;
+  final SortDirection direction;
+
+  const SortRule({
+    this.field = SortField.dueDate,
+    this.direction = SortDirection.ascending,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'field': field.index,
+        'direction': direction.index,
+      };
+
+  factory SortRule.fromJson(Map<String, dynamic> json) => SortRule(
+        field: SortField.values[json['field']],
+        direction: SortDirection.values[json['direction']],
+      );
+}
+
 class FilterList {
   final String id;
   final String name;
@@ -19,6 +134,10 @@ class FilterList {
 
   final TaskFilter? filter;
   final List<String> taskIds;
+  final List<SortRule> sortRules;
+  final GroupByField groupBy;
+  final NewTaskDefaults? newTaskDefaults;
+  final TaskCompletionAction completionAction;
 
   const FilterList({
     required this.id,
@@ -27,6 +146,10 @@ class FilterList {
     required this.type,
     this.filter,
     this.taskIds = const [],
+    this.sortRules = const [],
+    this.groupBy = GroupByField.none,
+    this.newTaskDefaults,
+    this.completionAction = TaskCompletionAction.keep,
   });
 
   bool matches(Task task) {
@@ -44,6 +167,10 @@ class FilterList {
         'type': type.index,
         'filter': filter?.toJson(),
         'taskIds': taskIds,
+        'sortRules': sortRules.map((e) => e.toJson()).toList(),
+        'groupBy': groupBy.index,
+        'newTaskDefaults': newTaskDefaults?.toJson(),
+        'completionAction': completionAction.index,
       };
 
   factory FilterList.fromJson(Map<String, dynamic> json) => FilterList(
@@ -55,6 +182,19 @@ class FilterList {
         filter:
             json['filter'] != null ? TaskFilter.fromJson(json['filter']) : null,
         taskIds: List<String>.from(json['taskIds'] ?? []),
+        sortRules: (json['sortRules'] as List<dynamic>?)
+                ?.map((e) => SortRule.fromJson(e))
+                .toList() ??
+            [],
+        groupBy: json['groupBy'] != null
+            ? GroupByField.values[json['groupBy']]
+            : GroupByField.none,
+        newTaskDefaults: json['newTaskDefaults'] != null
+            ? NewTaskDefaults.fromJson(json['newTaskDefaults'])
+            : null,
+        completionAction: json['completionAction'] != null
+            ? TaskCompletionAction.values[json['completionAction']]
+            : TaskCompletionAction.keep,
       );
 
   static FilterList upcoming() => FilterList(

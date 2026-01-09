@@ -71,4 +71,32 @@ class TaskSaver {
     var result = beginningOfFileContent + serializedTask + endOfFileContent;
     return result;
   }
+
+  Future<void> deleteTask(Task task) async {
+    if (task.taskSource == null) return;
+    var fileName = task.taskSource!.fileName;
+    var file = storage.getFile(fileName);
+    if (!await file.exists()) return;
+
+    var content = await file.readAsString();
+    int taskOffset = task.taskSource!.offset;
+    int taskLength = task.taskSource!.length;
+
+    if (taskOffset < 0 || taskOffset + taskLength > content.length) {
+      Logger().e("Invalid task offset/length for deletion");
+      return;
+    }
+
+    // Try to remove the trailing newline if it exists to avoid empty lines
+    var endOffset = taskOffset + taskLength;
+    if (endOffset < content.length && content[endOffset] == '\n') {
+      endOffset++;
+    }
+
+    var beginning = content.substring(0, taskOffset);
+    var end = content.substring(endOffset);
+
+    var newContent = beginning + end;
+    await file.writeAsString(newContent);
+  }
 }

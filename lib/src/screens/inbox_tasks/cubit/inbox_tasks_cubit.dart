@@ -241,6 +241,45 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
       return matchesQuery && matchesTags && notExcluded;
     }).toList();
 
+    // 6. Apply Sorting
+    if (currentFilterList.sortRules.isNotEmpty) {
+      filteredTasks.sort((a, b) {
+        for (var rule in currentFilterList.sortRules) {
+          int cmp = 0;
+          switch (rule.field) {
+            case SortField.alphabetical:
+              cmp = (a.description ?? "").compareTo(b.description ?? "");
+              break;
+            case SortField.dueDate:
+              cmp = _compareDates(a.due, b.due);
+              break;
+            case SortField.scheduledDate:
+              // For scheduled, maybe consider inferred? using a.scheduled directly
+              cmp = _compareDates(a.scheduled, b.scheduled);
+              break;
+            case SortField.createdDate:
+              cmp = _compareDates(a.created, b.created);
+              break;
+            case SortField.priority:
+              // Enum order: lowest(0) -> highest(5).
+              // Ascending: 0->5. Descending: 5->0.
+              cmp = a.priority.index.compareTo(b.priority.index);
+              break;
+            case SortField.status:
+              cmp = a.status.index.compareTo(b.status.index);
+              break;
+          }
+          if (cmp != 0) {
+            return rule.direction == SortDirection.ascending ? cmp : -cmp;
+          }
+        }
+        return 0; // All rules equal
+      });
+    } else {
+      // Fallback to legacy SortMode
+      filteredTasks.sort((a, b) => _compareTasksLegacy(a, b, sortMode));
+    }
+
     _taskDoneCount = taskDoneCount;
     _taskCount = filteredTasks.length;
     _updateView(filteredTasks);
@@ -264,6 +303,20 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
   Future changeTaskStatus(Task task, TaskStatus status) async {
     if (status == TaskStatus.done) {
       task.done = DateTime.now();
+
+      // Apply Completion Action
+      switch (currentFilterList.completionAction) {
+        case TaskCompletionAction.delete:
+          await _taskManager.deleteTask(task);
+          return;
+        case TaskCompletionAction.archive:
+          task.status = status; // Ensure status is updated before archiving
+          await _taskManager.archiveTask(task);
+          return;
+        case TaskCompletionAction.keep:
+        default:
+          break;
+      }
     } else {
       task.done = null;
     }
@@ -351,6 +404,22 @@ class InboxTasksCubit extends Cubit<InboxTasksState> {
     if (reviewCompletedReminderTime != null) {
       await SettingsController.getInstance()
           .updateReviewCompletedReminderTime(reviewCompletedReminderTime);
+    }
+  }
+
+  int _compareDates(DateTime? a, DateTime? b) {
+    if (a == null && b == null) return 0;
+    if (a == null) return 1; // Null is "larger" -> End of list (for ASC)
+    if (b == null) return -1;
+    return a.compareTo(b);
+  }
+
+  int _compareTasksLegacy(Task a, Task b, SortMode mode) {
+    switch (mode) {
+      case SortMode.byCreationDate:
+        return _compareDates(a.created, b.created);
+      case SortMode.none:
+        return 0; // Maintain original order
     }
   }
 }
