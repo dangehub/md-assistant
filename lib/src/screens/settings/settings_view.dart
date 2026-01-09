@@ -32,6 +32,7 @@ class _SettingsViewState extends State<SettingsView> {
   final _aiBaseUrlController = TextEditingController();
   final _aiApiKeyController = TextEditingController();
   final _aiModelNameController = TextEditingController();
+  final _memosPathController = TextEditingController();
 
   @override
   void initState() {
@@ -41,6 +42,7 @@ class _SettingsViewState extends State<SettingsView> {
     _aiBaseUrlController.text = widget.controller.aiBaseUrl ?? "";
     _aiApiKeyController.text = widget.controller.chatGptKey ?? "";
     _aiModelNameController.text = widget.controller.aiModelName ?? "";
+    _memosPathController.text = widget.controller.memosPath ?? "";
 
     _dateTemplateController.addListener(() {
       widget.controller.updateDateTemplate(_dateTemplateController.text);
@@ -66,6 +68,7 @@ class _SettingsViewState extends State<SettingsView> {
     _aiBaseUrlController.dispose();
     _aiApiKeyController.dispose();
     _aiModelNameController.dispose();
+    _memosPathController.dispose();
     widget.controller.removeListener(_onControllerChanged);
     super.dispose();
   }
@@ -195,6 +198,105 @@ class _SettingsViewState extends State<SettingsView> {
                         widget.controller.updateAiModelName(value);
                       },
                     )
+                  ])),
+          // Memos Settings Section
+          Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Memos Settings",
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 16),
+                    const Text("Memos Path:"),
+                    const SizedBox(height: 4),
+                    Text(
+                      "Static path (e.g., memos.md) or dynamic path with date variables (e.g., {{YYYY}}/{{YYYY-MM-DD}}.md)",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _memosPathController,
+                      decoration: const InputDecoration(
+                        hintText: "Enter memos path or template",
+                      ),
+                      onSubmitted: (value) {
+                        widget.controller.updateMemosPath(value);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text("Dynamic Path:"),
+                              const SizedBox(height: 4),
+                              Text(
+                                "Enable if path contains date variables like {{YYYY-MM-DD}}",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: widget.controller.memosPathIsDynamic,
+                          onChanged: (value) {
+                            widget.controller.updateMemosPathIsDynamic(value);
+                            setState(() {});
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text("Widget Sort Order:"),
+                              const SizedBox(height: 4),
+                              Text(
+                                "Ascending shows oldest memos first; Descending shows newest first",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SegmentedButton<bool>(
+                          segments: const [
+                            ButtonSegment(
+                              value: true,
+                              label: Text("Asc"),
+                            ),
+                            ButtonSegment(
+                              value: false,
+                              label: Text("Desc"),
+                            ),
+                          ],
+                          selected: {
+                            widget.controller.memosWidgetSortAscending
+                          },
+                          onSelectionChanged: (selected) {
+                            widget.controller
+                                .updateMemosWidgetSortAscending(selected.first);
+                            setState(() {});
+                          },
+                        ),
+                      ],
+                    ),
                   ])),
           Padding(
               padding: const EdgeInsets.all(16),

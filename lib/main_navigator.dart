@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:obsi/src/screens/settings/settings_controller.dart';
 import 'package:obsi/src/screens/ai_assistant/ai_assistant.dart';
 import 'package:obsi/src/screens/ai_assistant/cubit/ai_assistant_cubit.dart';
+import 'package:obsi/src/screens/memos/memos_screen.dart';
 
 import 'package:obsi/src/screens/settings/settings_view.dart';
 import 'package:obsi/src/core/tasks/task_manager.dart';
@@ -49,7 +50,7 @@ class _MainNavigatorState extends State<MainNavigator> {
   /// Switch to AI tab and send a message
   void switchToAIWithMessage(String message) {
     setState(() {
-      _currentScreen = 1;
+      _currentScreen = 2; // AI is now index 2
     });
     // Send message after a short delay to ensure UI is ready
     Future.delayed(const Duration(milliseconds: 100), () {
@@ -61,7 +62,7 @@ class _MainNavigatorState extends State<MainNavigator> {
     setState(() {
       _updateScreens();
       // If user now has premium and was on premium tab, switch to first tab
-      if (_settings.hasActiveSubscription && _currentScreen >= 2) {
+      if (_settings.hasActiveSubscription && _currentScreen >= 3) {
         _currentScreen = 0;
       }
     });
@@ -70,6 +71,7 @@ class _MainNavigatorState extends State<MainNavigator> {
   void _updateScreens() {
     screens = [
       InboxTasks(InboxTasksCubit(widget.taskManager)),
+      const MemosScreen(),
       AIAssistant(_aiAssistantCubit),
     ];
 
@@ -85,6 +87,8 @@ class _MainNavigatorState extends State<MainNavigator> {
     List<BottomNavigationBarItem> navigationItems = [
       const BottomNavigationBarItem(
           icon: Icon(Icons.check_circle_outline), label: "Tasks"),
+      const BottomNavigationBarItem(
+          icon: Icon(Icons.edit_note), label: "Memos"),
       const BottomNavigationBarItem(
           icon: Icon(Icons.bubble_chart), label: "AI"),
     ];

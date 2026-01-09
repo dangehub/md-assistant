@@ -380,4 +380,44 @@ class SettingsService {
       sharedPreferences.setString(_widgetFilterIdKey, filterId);
     }
   }
+
+  // Memos Settings
+  static const String _memosPathKey = "memos_path";
+  static const String _memosPathIsDynamicKey = "memos_path_is_dynamic";
+  static const String _memosWidgetSortAscendingKey =
+      "memos_widget_sort_ascending";
+
+  Future<String?> memosPath() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getString(_memosPathKey);
+  }
+
+  Future<void> updateMemosPath(String? path) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    if (path == null) {
+      sharedPreferences.remove(_memosPathKey);
+    } else {
+      sharedPreferences.setString(_memosPathKey, path);
+    }
+  }
+
+  Future<bool> memosPathIsDynamic() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getBool(_memosPathIsDynamicKey) ?? false;
+  }
+
+  Future<void> updateMemosPathIsDynamic(bool isDynamic) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    sharedPreferences.setBool(_memosPathIsDynamicKey, isDynamic);
+  }
+
+  Future<bool> memosWidgetSortAscending() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getBool(_memosWidgetSortAscendingKey) ?? false;
+  }
+
+  Future<void> updateMemosWidgetSortAscending(bool ascending) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    sharedPreferences.setBool(_memosWidgetSortAscendingKey, ascending);
+  }
 }

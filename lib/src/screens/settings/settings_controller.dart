@@ -189,6 +189,11 @@ class SettingsController with ChangeNotifier {
   DateTime? _reviewTasksReminderTime;
   DateTime? _reviewCompletedReminderTime;
 
+  // Memos settings
+  String? _memosPath;
+  bool _memosPathIsDynamic = false;
+  bool _memosWidgetSortAscending = false;
+
   SortMode get sortMode => _sortMode;
   ViewMode get viewMode => _viewMode;
   String? get vaultDirectory => _vaultDirectory;
@@ -219,6 +224,11 @@ class SettingsController with ChangeNotifier {
   DateTime? get subscriptionExpiry => _subscriptionExpiry;
   DateTime? get reviewTasksReminderTime => _reviewTasksReminderTime;
   DateTime? get reviewCompletedReminderTime => _reviewCompletedReminderTime;
+
+  // Memos settings getters
+  String? get memosPath => _memosPath;
+  bool get memosPathIsDynamic => _memosPathIsDynamic;
+  bool get memosWidgetSortAscending => _memosWidgetSortAscending;
 
   Future<void> loadSettings() async {
     _themeMode = await _settingsService.themeMode();
@@ -340,6 +350,12 @@ class SettingsController with ChangeNotifier {
       await updateZeroDate(DateTime.now());
     }
 
+    // Load memos settings
+    _memosPath = await _settingsService.memosPath();
+    _memosPathIsDynamic = await _settingsService.memosPathIsDynamic();
+    _memosWidgetSortAscending =
+        await _settingsService.memosWidgetSortAscending();
+
     notifyListeners();
   }
 
@@ -348,6 +364,28 @@ class SettingsController with ChangeNotifier {
 
     _rateDialogCounter = newCounter;
     await _settingsService.updateRateDialogCounter(newCounter);
+  }
+
+  // Memos settings update methods
+  Future<void> updateMemosPath(String? newPath) async {
+    if (newPath == _memosPath) return;
+    _memosPath = newPath;
+    notifyListeners();
+    await _settingsService.updateMemosPath(newPath);
+  }
+
+  Future<void> updateMemosPathIsDynamic(bool isDynamic) async {
+    if (isDynamic == _memosPathIsDynamic) return;
+    _memosPathIsDynamic = isDynamic;
+    notifyListeners();
+    await _settingsService.updateMemosPathIsDynamic(isDynamic);
+  }
+
+  Future<void> updateMemosWidgetSortAscending(bool ascending) async {
+    if (ascending == _memosWidgetSortAscending) return;
+    _memosWidgetSortAscending = ascending;
+    notifyListeners();
+    await _settingsService.updateMemosWidgetSortAscending(ascending);
   }
 
   //Future<void> updateNotificationTime(DateTime? newNotifTime) async {
