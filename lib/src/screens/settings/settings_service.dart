@@ -473,4 +473,134 @@ class SettingsService {
     var sharedPreferences = await SharedPreferences.getInstance();
     await sharedPreferences.setString(_imageCompressionFormatKey, format);
   }
+
+  // Microblog Settings
+  static const String _microblogFilenameKey = "microblog_filename";
+  static const String _microblogTitleKey = "microblog_title";
+  static const String _microblogTagKey = "microblog_tag";
+  static const String _microblogAvatarPathKey = "microblog_avatar_path";
+  static const String _microblogUsernameKey = "microblog_username";
+  static const String _microblogRepoUrlKey = "microblog_repo_url";
+  static const String _microblogRepoTokenKey = "microblog_repo_token";
+  static const String _microblogRepoPathKey = "microblog_repo_path";
+
+  Future<String> microblogFilename() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getString(_microblogFilenameKey) ?? 'microblog.md';
+  }
+
+  Future<void> updateMicroblogFilename(String value) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    await sharedPreferences.setString(_microblogFilenameKey, value);
+  }
+
+  Future<String> microblogTitle() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getString(_microblogTitleKey) ?? '我的微博客';
+  }
+
+  Future<void> updateMicroblogTitle(String value) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    await sharedPreferences.setString(_microblogTitleKey, value);
+  }
+
+  Future<String> microblogTag() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getString(_microblogTagKey) ?? '#mb';
+  }
+
+  Future<void> updateMicroblogTag(String value) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    await sharedPreferences.setString(_microblogTagKey, value);
+  }
+
+  static const String _microblogPermalinkKey = "microblog_permalink";
+
+  Future<String> microblogPermalink() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getString(_microblogPermalinkKey) ?? 'microblog';
+  }
+
+  Future<void> updateMicroblogPermalink(String value) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    await sharedPreferences.setString(_microblogPermalinkKey, value);
+  }
+
+  Future<String> microblogAvatarPath() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getString(_microblogAvatarPathKey) ??
+        'assets/avatar.png';
+  }
+
+  Future<void> updateMicroblogAvatarPath(String value) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    await sharedPreferences.setString(_microblogAvatarPathKey, value);
+  }
+
+  Future<String> microblogUsername() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getString(_microblogUsernameKey) ?? 'Me';
+  }
+
+  Future<void> updateMicroblogUsername(String value) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    await sharedPreferences.setString(_microblogUsernameKey, value);
+  }
+
+  Future<String> microblogRepoUrl() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getString(_microblogRepoUrlKey) ?? '';
+  }
+
+  Future<void> updateMicroblogRepoUrl(String value) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    await sharedPreferences.setString(_microblogRepoUrlKey, value);
+  }
+
+  Future<String> microblogRepoToken() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getString(_microblogRepoTokenKey) ?? '';
+  }
+
+  Future<void> updateMicroblogRepoToken(String value) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    await sharedPreferences.setString(_microblogRepoTokenKey, value);
+  }
+
+  Future<String> microblogRepoPath() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getString(_microblogRepoPathKey) ??
+        'src/site/notes/';
+  }
+
+  Future<void> updateMicroblogRepoPath(String value) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    await sharedPreferences.setString(_microblogRepoPathKey, value);
+  }
+
+  static const String _microblogRepoImagePathKey = "microblog_repo_image_path";
+  static const String _microblogWebImagePrefixKey =
+      "microblog_web_image_prefix";
+
+  Future<String> microblogRepoImagePath() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getString(_microblogRepoImagePathKey) ??
+        'src/site/img/user/microblog';
+  }
+
+  Future<void> updateMicroblogRepoImagePath(String value) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    await sharedPreferences.setString(_microblogRepoImagePathKey, value);
+  }
+
+  Future<String> microblogWebImagePrefix() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getString(_microblogWebImagePrefixKey) ??
+        '/img/user/microblog';
+  }
+
+  Future<void> updateMicroblogWebImagePrefix(String value) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    await sharedPreferences.setString(_microblogWebImagePrefixKey, value);
+  }
 }
