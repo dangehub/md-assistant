@@ -249,7 +249,7 @@ class NotesWidget : GlanceAppWidget() {
         ) {
             val configureAction = actionRunCallback<OpenNotesConfigActionCallback>()
             Image(
-                provider = ImageProvider(resId = R.drawable.ic_launcher),
+                provider = ImageProvider(resId = R.mipmap.ic_launcher),
                 contentDescription = "Obsi icon",
                 modifier = GlanceModifier
                     .height(24.dp)

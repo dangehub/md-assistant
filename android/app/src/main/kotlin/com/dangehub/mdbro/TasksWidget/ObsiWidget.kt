@@ -175,7 +175,7 @@ class ObsiWidget : GlanceAppWidget() {
             // App icon and name on the left, both clickable to launch MainActivity
             val launchAppAction = actionStartActivity(MainActivity::class.java)
             Image(
-                provider = ImageProvider(resId = R.drawable.ic_launcher),
+                provider = ImageProvider(resId = R.mipmap.ic_launcher),
                 contentDescription = "Obsi icon",
                 modifier = GlanceModifier
                     .height(24.dp)
