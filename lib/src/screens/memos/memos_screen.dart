@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 import 'package:obsi/src/screens/memos/cubit/memos_cubit.dart';
 import 'package:obsi/src/screens/settings/settings_controller.dart';
+import 'package:obsi/src/screens/settings/settings_service.dart';
 import 'package:obsi/src/widgets/memo_card.dart';
 import 'package:obsi/src/core/vault_cache_service.dart';
+import 'package:obsi/src/core/variable_resolver.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import 'package:path/path.dart' as p;
 
 /// The main Memos screen displaying all memos in a microblog-style view.
 class MemosScreen extends StatefulWidget {
@@ -285,6 +290,102 @@ class _MemosScreenState extends State<MemosScreen> {
     _showSuggestions('', 'wiki');
   }
 
+  /// Pick an image and insert it as attachment
+  Future<void> _pickAndInsertAttachment(BuildContext context) async {
+    final settingsService = SettingsService();
+    final attachmentDir = await settingsService.memosAttachmentDirectory();
+
+    // Check if attachment directory is configured
+    if (attachmentDir == null || attachmentDir.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('请先在设置中配置 Memos 附件目录'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Get vault directory
+    final settingsController = SettingsController.getInstance();
+    final vaultDir = settingsController.vaultDirectory;
+    if (vaultDir == null || vaultDir.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('请先配置 Vault 目录'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Pick image
+    final ImagePicker picker = ImagePicker();
+    final XFile? pickedFile =
+        await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile == null) return;
+
+    try {
+      // Resolve attachment directory with variables
+      final resolvedDir = VariableResolver.resolve(attachmentDir);
+      final targetDirPath = p.join(vaultDir, resolvedDir);
+
+      // Create directory if it doesn't exist
+      final targetDir = Directory(targetDirPath);
+      if (!await targetDir.exists()) {
+        await targetDir.create(recursive: true);
+      }
+
+      // Generate unique filename with timestamp
+      final originalName = p.basename(pickedFile.path);
+      final extension = p.extension(originalName);
+      final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final newFileName = 'attachment_$timestamp$extension';
+      final targetPath = p.join(targetDirPath, newFileName);
+
+      // Copy file to target directory
+      final File sourceFile = File(pickedFile.path);
+      await sourceFile.copy(targetPath);
+
+      // Insert markdown at cursor
+      final text = _inputController.text;
+      final selection = _inputController.selection;
+      final cursorPos = selection.isValid ? selection.baseOffset : text.length;
+
+      final insertText = '![[${p.join(resolvedDir, newFileName)}]]';
+      final newText =
+          text.substring(0, cursorPos) + insertText + text.substring(cursorPos);
+      _inputController.text = newText;
+      _inputController.selection =
+          TextSelection.collapsed(offset: cursorPos + insertText.length);
+      _inputFocusNode.requestFocus();
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('附件已保存到: $resolvedDir'),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('保存附件失败: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
@@ -392,6 +493,16 @@ class _MemosScreenState extends State<MemosScreen> {
                 ),
                 onPressed: _insertWikiLink,
                 tooltip: '插入链接 [[]]',
+              ),
+              // Attachment button
+              IconButton(
+                icon: Icon(
+                  Icons.attach_file,
+                  color: colorScheme.onSurfaceVariant,
+                  size: 20,
+                ),
+                onPressed: () => _pickAndInsertAttachment(context),
+                tooltip: '添加附件',
               ),
               // Calendar navigation button
               IconButton(

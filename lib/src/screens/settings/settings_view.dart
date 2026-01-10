@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:obsi/src/screens/subscription/subscription_screen.dart';
 
 import 'settings_controller.dart';
+import 'settings_service.dart';
 
 /// Displays the various settings that can be customized by the user.
 ///
@@ -33,6 +34,7 @@ class _SettingsViewState extends State<SettingsView> {
   final _aiApiKeyController = TextEditingController();
   final _aiModelNameController = TextEditingController();
   final _memosPathController = TextEditingController();
+  final _memosAttachmentDirController = TextEditingController();
 
   @override
   void initState() {
@@ -43,6 +45,7 @@ class _SettingsViewState extends State<SettingsView> {
     _aiApiKeyController.text = widget.controller.chatGptKey ?? "";
     _aiModelNameController.text = widget.controller.aiModelName ?? "";
     _memosPathController.text = widget.controller.memosPath ?? "";
+    _loadMemosAttachmentDir();
 
     _dateTemplateController.addListener(() {
       widget.controller.updateDateTemplate(_dateTemplateController.text);
@@ -60,6 +63,17 @@ class _SettingsViewState extends State<SettingsView> {
     });
   }
 
+  Future<void> _loadMemosAttachmentDir() async {
+    final service = SettingsService();
+    final dir = await service.memosAttachmentDirectory();
+    _memosAttachmentDirController.text = dir ?? "";
+  }
+
+  Future<void> _saveMemosAttachmentDir(String value) async {
+    final service = SettingsService();
+    await service.updateMemosAttachmentDirectory(value);
+  }
+
   @override
   void dispose() {
     _tasksFileNameController.dispose();
@@ -69,6 +83,7 @@ class _SettingsViewState extends State<SettingsView> {
     _aiApiKeyController.dispose();
     _aiModelNameController.dispose();
     _memosPathController.dispose();
+    _memosAttachmentDirController.dispose();
     widget.controller.removeListener(_onControllerChanged);
     super.dispose();
   }
@@ -296,6 +311,26 @@ class _SettingsViewState extends State<SettingsView> {
                           },
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text("附件目录 (Attachment Directory):"),
+                    const SizedBox(height: 4),
+                    Text(
+                      "相对于 Vault 的路径，支持日期变量。例如: assets 或 {{YYYY}}/assets",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _memosAttachmentDirController,
+                      decoration: const InputDecoration(
+                        hintText: "例如: assets 或 {{YYYY}}/assets",
+                      ),
+                      onSubmitted: (value) {
+                        _saveMemosAttachmentDir(value);
+                      },
                     ),
                   ])),
           Padding(

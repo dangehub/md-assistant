@@ -420,4 +420,22 @@ class SettingsService {
     var sharedPreferences = await SharedPreferences.getInstance();
     sharedPreferences.setBool(_memosWidgetSortAscendingKey, ascending);
   }
+
+  // Memos Attachment Directory
+  static const String _memosAttachmentDirectoryKey =
+      "memos_attachment_directory";
+
+  Future<String?> memosAttachmentDirectory() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getString(_memosAttachmentDirectoryKey);
+  }
+
+  Future<void> updateMemosAttachmentDirectory(String? directory) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    if (directory == null || directory.isEmpty) {
+      sharedPreferences.remove(_memosAttachmentDirectoryKey);
+    } else {
+      sharedPreferences.setString(_memosAttachmentDirectoryKey, directory);
+    }
+  }
 }
