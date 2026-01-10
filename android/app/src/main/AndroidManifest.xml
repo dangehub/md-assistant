@@ -57,6 +57,17 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/notes_widget_provider" />
         </receiver>
+        <receiver
+            android:name="com.dangehub.mdbro.CombinedWidgetReceiver"
+            android:exported="false"
+            android:label="MD Bro Combined">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/combined_widget_provider" />
+        </receiver>
         <activity
             android:name="com.dangehub.mdbro.WidgetConfigureActivity"
             android:exported="false"

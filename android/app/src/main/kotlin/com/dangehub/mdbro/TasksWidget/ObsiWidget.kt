@@ -31,6 +31,7 @@ import androidx.glance.layout.Alignment.Companion.CenterVertically
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
@@ -126,6 +127,7 @@ class ObsiWidget : GlanceAppWidget() {
         var fontColor = getFontColor(context)
         Column(
             modifier = GlanceModifier
+                .fillMaxSize()
                 .background(backgroundColor)
                 .padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
