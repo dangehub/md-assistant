@@ -5,7 +5,7 @@ import 'package:obsi/src/screens/memos/cubit/memos_cubit.dart';
 import 'package:obsi/src/screens/settings/settings_controller.dart';
 import 'package:obsi/src/widgets/memo_card.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'package:scroll_to_index/scroll_to_index.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 /// The main Memos screen displaying all memos in a microblog-style view.
 class MemosScreen extends StatefulWidget {
@@ -18,24 +18,16 @@ class MemosScreen extends StatefulWidget {
 class _MemosScreenState extends State<MemosScreen> {
   final TextEditingController _inputController = TextEditingController();
   final FocusNode _inputFocusNode = FocusNode();
-  late AutoScrollController _scrollController;
+  final ItemScrollController _itemScrollController = ItemScrollController();
+  final ItemPositionsListener _itemPositionsListener =
+      ItemPositionsListener.create();
 
   List<DateTime> _sortedDates = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _scrollController = AutoScrollController(
-      viewportBoundaryGetter: () =>
-          Rect.fromLTRB(0, 0, 0, MediaQuery.of(context).padding.bottom),
-    );
-  }
 
   @override
   void dispose() {
     _inputController.dispose();
     _inputFocusNode.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -197,52 +189,47 @@ class _MemosScreenState extends State<MemosScreen> {
             // Main list
             RefreshIndicator(
               onRefresh: () => context.read<MemosCubit>().refresh(),
-              child: ListView.builder(
-                controller: _scrollController,
+              child: ScrollablePositionedList.builder(
+                itemScrollController: _itemScrollController,
+                itemPositionsListener: _itemPositionsListener,
                 padding: const EdgeInsets.only(top: 8, bottom: 80),
                 itemCount: _sortedDates.length,
-                // Use cacheExtent for better scroll performance
-                cacheExtent: 500,
                 itemBuilder: (context, index) {
                   final date = _sortedDates[index];
                   final memos = state.groupedMemos[date]!;
 
-                  return AutoScrollTag(
-                    key: ValueKey(index),
-                    controller: _scrollController,
-                    index: index,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Date header
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                          child: Text(
-                            _formatDateHeader(date),
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Date header
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        child: Text(
+                          _formatDateHeader(date),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        // Memos for this date
-                        ...memos.map((memo) => MemoCard(
-                              memo: memo,
-                              vaultDirectory: vaultDir,
-                              onDelete: () =>
-                                  context.read<MemosCubit>().deleteMemo(memo),
-                            )),
-                      ],
-                    ),
+                      ),
+                      // Memos for this date
+                      ...memos.map((memo) => MemoCard(
+                            memo: memo,
+                            vaultDirectory: vaultDir,
+                            onDelete: () =>
+                                context.read<MemosCubit>().deleteMemo(memo),
+                          )),
+                    ],
                   );
                 },
               ),
             ),
             // Custom draggable scrollbar
             _DraggableScrollbar(
-              controller: _scrollController,
+              itemScrollController: _itemScrollController,
+              itemPositionsListener: _itemPositionsListener,
               listHeight: listHeight,
               sortedDates: _sortedDates,
               formatDate: (date) => DateFormat('yyyy/MM/dd').format(date),
@@ -270,6 +257,26 @@ class _MemosScreenState extends State<MemosScreen> {
   void _showCalendarPicker(BuildContext context) {
     if (_sortedDates.isEmpty) return;
 
+    DateTime initialFocusedDay = DateTime.now();
+
+    // Sync calendar with current viewport
+    final positions = _itemPositionsListener.itemPositions.value;
+    if (positions.isNotEmpty) {
+      // Find the top-most visible item (smallest index)
+      final minIndex = positions
+          .where(
+              (p) => p.itemTrailingEdge > 0) // Ensure item is somewhat visible
+          .fold(999999, (prev, p) => p.index < prev ? p.index : prev);
+
+      if (minIndex < _sortedDates.length && minIndex >= 0) {
+        initialFocusedDay = _sortedDates[minIndex];
+      } else {
+        initialFocusedDay = _sortedDates.first;
+      }
+    } else {
+      initialFocusedDay = _sortedDates.first;
+    }
+
     final firstDate = _sortedDates.last; // Descending order: last is oldest
     final lastDate = DateTime.now();
 
@@ -283,77 +290,14 @@ class _MemosScreenState extends State<MemosScreen> {
       isScrollControlled: true,
       useSafeArea: true,
       builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
-          expand: false,
-          builder: (context, scrollController) {
-            return Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    margin: const EdgeInsets.symmetric(vertical: 12),
-                    height: 4,
-                    width: 40,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.outlineVariant,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      controller: scrollController,
-                      child: TableCalendar(
-                        firstDay: firstDate
-                            .subtract(const Duration(days: 365)), // Buffer
-                        lastDay: lastDate.add(const Duration(days: 365)),
-                        focusedDay: lastDate,
-                        startingDayOfWeek: StartingDayOfWeek.monday,
-                        headerStyle: const HeaderStyle(
-                          titleCentered: true,
-                          formatButtonVisible: false,
-                        ),
-                        // Mark days with memos
-                        eventLoader: (day) {
-                          final normalizeDay =
-                              DateTime(day.year, day.month, day.day);
-                          return memoDates.contains(normalizeDay) ? [true] : [];
-                        },
-                        calendarBuilders: CalendarBuilders(
-                          markerBuilder: (context, day, events) {
-                            if (events.isNotEmpty) {
-                              return Positioned(
-                                bottom: 1,
-                                child: Container(
-                                  width: 5,
-                                  height: 5,
-                                  decoration: BoxDecoration(
-                                    color:
-                                        Theme.of(context).colorScheme.primary,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              );
-                            }
-                            return null;
-                          },
-                        ),
-                        onDaySelected: (selectedDay, focusedDay) {
-                          Navigator.pop(context);
-                          _scrollToDate(selectedDay);
-                        },
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
+        return _MemosCalendarPicker(
+          firstDate: firstDate.subtract(const Duration(days: 365)), // Buffer
+          lastDate: lastDate.add(const Duration(days: 365)),
+          initialFocusedDay: initialFocusedDay,
+          memoDates: memoDates,
+          onDateSelected: (selectedDay) {
+            Navigator.pop(context);
+            _scrollToDate(selectedDay);
           },
         );
       },
@@ -399,12 +343,8 @@ class _MemosScreenState extends State<MemosScreen> {
 
     targetIndex = closestIndex;
 
-    // Jump with precision using scroll_to_index
-    _scrollController.scrollToIndex(
-      targetIndex,
-      preferPosition: AutoScrollPosition.begin,
-      duration: const Duration(milliseconds: 500),
-    );
+    // Virtual jump (instant)
+    _itemScrollController.jumpTo(index: targetIndex);
   }
 
   Widget _buildNotConfigured(BuildContext context) {
@@ -532,15 +472,343 @@ class _MemosScreenState extends State<MemosScreen> {
   }
 }
 
+/// A stateful calendar picker that supports year/month jumping and "back to today".
+class _MemosCalendarPicker extends StatefulWidget {
+  final DateTime firstDate;
+  final DateTime lastDate;
+  final DateTime initialFocusedDay;
+  final Set<DateTime> memoDates;
+  final ValueChanged<DateTime> onDateSelected;
+
+  const _MemosCalendarPicker({
+    super.key,
+    required this.firstDate,
+    required this.lastDate,
+    required this.initialFocusedDay,
+    required this.memoDates,
+    required this.onDateSelected,
+  });
+
+  @override
+  State<_MemosCalendarPicker> createState() => _MemosCalendarPickerState();
+}
+
+class _MemosCalendarPickerState extends State<_MemosCalendarPicker> {
+  late DateTime _focusedDay;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusedDay = widget.initialFocusedDay;
+  }
+
+  void _jumpToToday() {
+    setState(() {
+      _focusedDay = DateTime.now();
+    });
+  }
+
+  Future<void> _selectYearMonth() async {
+    final picked = await showDialog<DateTime>(
+      context: context,
+      builder: (context) => _YearMonthPicker(
+        initialDate: _focusedDay,
+        firstDate: widget.firstDate,
+        lastDate: widget.lastDate,
+      ),
+    );
+
+    if (picked != null && mounted) {
+      setState(() {
+        _focusedDay = picked;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.4,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // Drag Handle
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                height: 4,
+                width: 40,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+
+              // Calendar Header Extras (Today Button)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton.icon(
+                      onPressed: _jumpToToday,
+                      icon: const Icon(Icons.today, size: 16),
+                      label: const Text('Today'),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: scrollController,
+                  child: TableCalendar(
+                    firstDay: widget.firstDate,
+                    lastDay: widget.lastDate,
+                    focusedDay: _focusedDay,
+                    startingDayOfWeek: StartingDayOfWeek.monday,
+                    headerStyle: const HeaderStyle(
+                      titleCentered: true,
+                      formatButtonVisible: false,
+                    ),
+                    onPageChanged: (focusedDay) {
+                      _focusedDay = focusedDay;
+                    },
+                    onHeaderTapped: (_) => _selectYearMonth(),
+                    // Custom Header to include Dropdown Arrow
+                    calendarBuilders: CalendarBuilders(
+                      headerTitleBuilder: (context, day) {
+                        return Center(
+                          child: InkWell(
+                            onTap: _selectYearMonth,
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8.0, vertical: 4.0),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    DateFormat.yMMMM().format(day),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
+                                        ?.copyWith(fontSize: 18),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    Icons.arrow_drop_down,
+                                    color:
+                                        Theme.of(context).colorScheme.onSurface,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                      markerBuilder: (context, day, events) {
+                        if (events.isNotEmpty) {
+                          return Positioned(
+                            bottom: 1,
+                            child: Container(
+                              width: 5,
+                              height: 5,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primary,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          );
+                        }
+                        return null;
+                      },
+                    ),
+                    // Mark days with memos
+                    eventLoader: (day) {
+                      final normalizeDay =
+                          DateTime(day.year, day.month, day.day);
+                      return widget.memoDates.contains(normalizeDay)
+                          ? [true]
+                          : [];
+                    },
+                    onDaySelected: (selectedDay, focusedDay) {
+                      widget.onDateSelected(selectedDay);
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// A custom dialog for selecting Year and Month.
+class _YearMonthPicker extends StatefulWidget {
+  final DateTime initialDate;
+  final DateTime firstDate;
+  final DateTime lastDate;
+
+  const _YearMonthPicker({
+    required this.initialDate,
+    required this.firstDate,
+    required this.lastDate,
+  });
+
+  @override
+  State<_YearMonthPicker> createState() => _YearMonthPickerState();
+}
+
+class _YearMonthPickerState extends State<_YearMonthPicker> {
+  late int _selectedYear;
+  late int _selectedMonth;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedYear = widget.initialDate.year;
+    _selectedMonth = widget.initialDate.month;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final years = List.generate(
+      widget.lastDate.year - widget.firstDate.year + 1,
+      (index) => widget.firstDate.year + index,
+    );
+    final months = List.generate(12, (index) => index + 1);
+
+    return AlertDialog(
+      title: const Text('Select Month'),
+      content: SizedBox(
+        height: 200,
+        child: Row(
+          children: [
+            // Year Column
+            Expanded(
+              child: Column(
+                children: [
+                  Text('Year', style: theme.textTheme.labelMedium),
+                  Expanded(
+                    child: ListWheelScrollView.useDelegate(
+                      itemExtent: 40,
+                      controller: FixedExtentScrollController(
+                        initialItem: years.indexOf(_selectedYear),
+                      ),
+                      physics: const FixedExtentScrollPhysics(),
+                      onSelectedItemChanged: (index) {
+                        setState(() {
+                          _selectedYear = years[index];
+                        });
+                      },
+                      childDelegate: ListWheelChildBuilderDelegate(
+                        builder: (context, index) {
+                          final year = years[index];
+                          final isSelected = year == _selectedYear;
+                          return Center(
+                            child: Text(
+                              year.toString(),
+                              style: isSelected
+                                  ? theme.textTheme.titleLarge?.copyWith(
+                                      color: theme.colorScheme.primary,
+                                      fontWeight: FontWeight.bold)
+                                  : theme.textTheme.bodyLarge,
+                            ),
+                          );
+                        },
+                        childCount: years.length,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Month Column
+            Expanded(
+              child: Column(
+                children: [
+                  Text('Month', style: theme.textTheme.labelMedium),
+                  Expanded(
+                    child: ListWheelScrollView.useDelegate(
+                      itemExtent: 40,
+                      controller: FixedExtentScrollController(
+                        initialItem: _selectedMonth - 1,
+                      ),
+                      physics: const FixedExtentScrollPhysics(),
+                      onSelectedItemChanged: (index) {
+                        setState(() {
+                          _selectedMonth = months[index];
+                        });
+                      },
+                      childDelegate: ListWheelChildBuilderDelegate(
+                        builder: (context, index) {
+                          final month = months[index];
+                          final isSelected = month == _selectedMonth;
+                          return Center(
+                            child: Text(
+                              DateFormat.MMM().format(DateTime(2024, month)),
+                              style: isSelected
+                                  ? theme.textTheme.titleLarge?.copyWith(
+                                      color: theme.colorScheme.primary,
+                                      fontWeight: FontWeight.bold)
+                                  : theme.textTheme.bodyLarge,
+                            ),
+                          );
+                        },
+                        childCount: months.length,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.pop(
+              context,
+              DateTime(_selectedYear, _selectedMonth),
+            );
+          },
+          child: const Text('OK'),
+        ),
+      ],
+    );
+  }
+}
+
 /// Custom draggable scrollbar with date indicator
 class _DraggableScrollbar extends StatefulWidget {
-  final ScrollController controller;
+  final ItemScrollController itemScrollController;
+  final ItemPositionsListener itemPositionsListener;
   final double listHeight;
   final List<DateTime> sortedDates;
   final String Function(DateTime) formatDate;
 
   const _DraggableScrollbar({
-    required this.controller,
+    required this.itemScrollController,
+    required this.itemPositionsListener,
     required this.listHeight,
     required this.sortedDates,
     required this.formatDate,
@@ -566,18 +834,11 @@ class _DraggableScrollbar extends StatefulWidget {
 
       if (isDescending) {
         if (midIsAfter) {
-          min = mid +
-              1; // Target is later (smaller index in desc) -> Go right? No.
-          // Desc: [2025, 2024]. Target 2023.
-          // 2025 is after 2023. True.
-          // We want 2024 (index 1). So move min up. Correct.
+          min = mid + 1;
         } else {
           max = mid - 1;
         }
       } else {
-        // Ascending: [2023, 2024]. Target 2025.
-        // 2023 is before 2025. midIsAfter = False.
-        // We want 2024 (index 1). Move min up.
         if (midIsAfter) {
           max = mid - 1;
         } else {
@@ -604,82 +865,76 @@ class _DraggableScrollbar extends StatefulWidget {
 class _DraggableScrollbarState extends State<_DraggableScrollbar>
     with SingleTickerProviderStateMixin {
   bool _isDragging = false;
-  double _thumbOffset = 0;
+  double _thumbOffset = 0.0;
   String _currentDate = '';
-  double _dragPosition = 0;
+  double _dragPosition = 0.0; // Current user touch position
 
+  // Animation for thumb expansion
   late AnimationController _animController;
   late Animation<double> _expandAnimation;
 
-  static const double _thumbWidth = 6;
-  static const double _thumbWidthActive = 24;
-  static const double _thumbMinHeight = 48;
-  static const double _trackWidthActive = 36;
+  // Constants
+  static const double _thumbWidth = 6.0;
+  static const double _thumbWidthDragging = 24.0;
+
+  static const double _thumbMinHeight =
+      40.0; // Fixed thumb height for virtual scrolling
+  static const double _trackWidthActive = 24.0;
+  static const double _scrollbarPadding = 2.0;
 
   @override
   void initState() {
     super.initState();
-    widget.controller.addListener(_onScrollChanged);
-
     _animController = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: this,
-    );
-    _expandAnimation = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOutCubic,
-    );
+        vsync: this, duration: const Duration(milliseconds: 200));
+    _expandAnimation =
+        CurvedAnimation(parent: _animController, curve: Curves.easeOut);
+
+    widget.itemPositionsListener.itemPositions.addListener(_onScrollChanged);
   }
 
   @override
   void dispose() {
-    widget.controller.removeListener(_onScrollChanged);
+    widget.itemPositionsListener.itemPositions.removeListener(_onScrollChanged);
     _animController.dispose();
     super.dispose();
   }
 
   void _onScrollChanged() {
-    if (!_isDragging && mounted) {
+    if (!_isDragging && mounted && widget.sortedDates.isNotEmpty) {
       _updateThumbPosition();
     }
   }
 
   void _updateThumbPosition() {
-    if (!widget.controller.hasClients) return;
+    final positions = widget.itemPositionsListener.itemPositions.value;
+    if (positions.isEmpty) return;
 
-    try {
-      final maxScroll = widget.controller.position.maxScrollExtent;
-      if (maxScroll <= 0) return;
+    // Find the first visible item
+    final minIndex = positions
+        .where((p) => p.itemLeadingEdge < 1 && p.itemTrailingEdge > 0)
+        .fold(999999, (prev, p) => p.index < prev ? p.index : prev);
 
-      final scrollRatio = widget.controller.offset / maxScroll;
-      final thumbHeight = _calculateThumbHeight();
-      final maxThumbOffset = widget.listHeight - thumbHeight;
+    if (minIndex >= widget.sortedDates.length) return;
 
-      setState(() {
-        _thumbOffset =
-            (scrollRatio * maxThumbOffset).clamp(0.0, maxThumbOffset);
-      });
-    } catch (e) {
-      // Ignore
-    }
-  }
+    // Map Index -> Date -> Time Ratio -> Thumb Pixel
+    final currentDate = widget.sortedDates[minIndex];
+    final minDate = widget.sortedDates.first;
+    final maxDate = widget.sortedDates.last;
 
-  double _calculateThumbHeight() {
-    if (!widget.controller.hasClients) return _thumbMinHeight;
+    final totalDuration = maxDate.difference(minDate).inMilliseconds.abs();
+    if (totalDuration == 0) return;
 
-    try {
-      final viewportHeight = widget.controller.position.viewportDimension;
-      final contentHeight =
-          widget.controller.position.maxScrollExtent + viewportHeight;
+    final currentDuration =
+        currentDate.difference(minDate).inMilliseconds.abs();
+    final timeRatio = currentDuration / totalDuration;
 
-      if (contentHeight <= 0) return _thumbMinHeight;
+    final trackHeight =
+        widget.listHeight - _thumbMinHeight - (_scrollbarPadding * 2);
 
-      final ratio = viewportHeight / contentHeight;
-      return (ratio * widget.listHeight)
-          .clamp(_thumbMinHeight, widget.listHeight / 3);
-    } catch (e) {
-      return _thumbMinHeight;
-    }
+    setState(() {
+      _thumbOffset = (timeRatio * trackHeight).clamp(0.0, trackHeight);
+    });
   }
 
   void _onDragStart(DragStartDetails details) {
@@ -700,7 +955,6 @@ class _DraggableScrollbarState extends State<_DraggableScrollbar>
   }
 
   void _onDragEnd(DragEndDetails details) {
-    // Now perform the actual scroll jump
     _performScrollJump();
 
     _animController.reverse().then((_) {
@@ -719,29 +973,24 @@ class _DraggableScrollbarState extends State<_DraggableScrollbar>
     final minDate = widget.sortedDates.first;
     final maxDate = widget.sortedDates.last;
 
-    // Linearly interpolate time between min and max date
     final totalDuration = maxDate.difference(minDate).inMilliseconds;
-    // Note: if totalDuration is negative (descending), this still works correctly
     final targetTimeMs =
         minDate.millisecondsSinceEpoch + (totalDuration * ratio);
     final targetDate =
         DateTime.fromMillisecondsSinceEpoch(targetTimeMs.round());
 
-    // Find closest existing date
     final index = widget._findClosestDateIndex(targetDate);
     final date = widget.sortedDates[index];
 
     setState(() {
-      // Show the closest ACTUAL date
       _currentDate = widget.formatDate(date);
       // Thumb follows finger
-      _thumbOffset =
-          position.clamp(0.0, widget.listHeight - _calculateThumbHeight());
+      _thumbOffset = position.clamp(0.0, widget.listHeight - _thumbMinHeight);
     });
   }
 
   void _performScrollJump() {
-    if (widget.sortedDates.isEmpty || !widget.controller.hasClients) return;
+    if (widget.sortedDates.isEmpty) return;
 
     try {
       final ratio = (_dragPosition / widget.listHeight).clamp(0.0, 1.0);
@@ -756,19 +1005,8 @@ class _DraggableScrollbarState extends State<_DraggableScrollbar>
 
       final index = widget._findClosestDateIndex(targetDate);
 
-      // Use precision scroll with AutoScrollController
-      if (widget.controller is AutoScrollController) {
-        (widget.controller as AutoScrollController).scrollToIndex(
-          index,
-          preferPosition: AutoScrollPosition.begin,
-          duration: const Duration(milliseconds: 500),
-        );
-      } else {
-        // Fallback (should not happen in current implementation)
-        final scrollRatio = index / (widget.sortedDates.length - 1);
-        final maxScroll = widget.controller.position.maxScrollExtent;
-        widget.controller.jumpTo(scrollRatio * maxScroll);
-      }
+      // Virtual jump (instant)
+      widget.itemScrollController.jumpTo(index: index);
     } catch (e) {
       // Ignore
     }
@@ -784,7 +1022,8 @@ class _DraggableScrollbarState extends State<_DraggableScrollbar>
 
   @override
   Widget build(BuildContext context) {
-    final thumbHeight = _calculateThumbHeight();
+    // Fixed thumb height used for calculations
+    const thumbHeight = _thumbMinHeight;
     final colorScheme = Theme.of(context).colorScheme;
 
     return Positioned(
@@ -840,6 +1079,9 @@ class _DraggableScrollbarState extends State<_DraggableScrollbar>
                 if (_isDragging && _currentDate.isNotEmpty)
                   Positioned(
                     right: trackWidth + 16,
+                    // Use thumbOffset directly or dragPosition
+                    // dragPosition matches finger, thumbOffset is constrained
+                    // Use dragPosition for label to be exactly at finger
                     top: (_dragPosition - 16)
                         .clamp(20.0, widget.listHeight - 40),
                     child: _buildDateLabel(_currentDate, colorScheme,
@@ -851,62 +1093,34 @@ class _DraggableScrollbarState extends State<_DraggableScrollbar>
                   right: 0,
                   top: 0,
                   bottom: 0,
+                  width: 50, // Increase touch area width
                   child: GestureDetector(
+                    behavior: HitTestBehavior
+                        .translucent, // Capture drags even on transparent
                     onVerticalDragStart: _onDragStart,
                     onVerticalDragUpdate: _onDragUpdate,
                     onVerticalDragEnd: _onDragEnd,
-                    child: Container(
-                      width: _isDragging ? trackWidth + 16 : 28,
-                      color: Colors.transparent,
-                      child: Stack(
-                        children: [
-                          // Normal track
-                          if (!_isDragging)
-                            Positioned(
-                              right: 8,
-                              top: 0,
-                              bottom: 0,
-                              child: Container(
-                                width: _thumbWidth,
-                                decoration: BoxDecoration(
-                                  color: colorScheme.surfaceContainerHighest
-                                      .withOpacity(0.3),
-                                  borderRadius: BorderRadius.circular(3),
-                                ),
-                              ),
-                            ),
-
-                          // Thumb
-                          Positioned(
-                            right: 8,
-                            top:
-                                _isDragging ? _dragPosition - 12 : _thumbOffset,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 100),
-                              width:
-                                  _isDragging ? _thumbWidthActive : _thumbWidth,
-                              height:
-                                  _isDragging ? _thumbWidthActive : thumbHeight,
-                              decoration: BoxDecoration(
-                                color: colorScheme.primary,
-                                borderRadius: BorderRadius.circular(
-                                  _isDragging ? _thumbWidthActive / 2 : 3,
-                                ),
-                                boxShadow: _isDragging
-                                    ? [
-                                        BoxShadow(
-                                          color: colorScheme.primary
-                                              .withOpacity(0.4),
-                                          blurRadius: 8,
-                                          spreadRadius: 1,
-                                        ),
-                                      ]
-                                    : null,
-                              ),
+                    child: Stack(
+                      children: [
+                        // Thumb
+                        Positioned(
+                          right: 8,
+                          top: _thumbOffset,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            width:
+                                _isDragging ? _thumbWidthDragging : _thumbWidth,
+                            height: thumbHeight,
+                            decoration: BoxDecoration(
+                              color: _isDragging
+                                  ? colorScheme.primary
+                                  : colorScheme.primary.withOpacity(0.6),
+                              borderRadius:
+                                  BorderRadius.circular(thumbHeight / 2),
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -922,19 +1136,17 @@ class _DraggableScrollbarState extends State<_DraggableScrollbar>
       {required bool small}) {
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: small ? 6 : 10,
-        vertical: small ? 3 : 6,
+        horizontal: small ? 8 : 12,
+        vertical: small ? 4 : 8,
       ),
       decoration: BoxDecoration(
-        color: small
-            ? colorScheme.surfaceContainerHighest
-            : colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(4),
+        color: colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 3,
-            offset: const Offset(-1, 1),
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 6,
+            offset: const Offset(-2, 2),
           ),
         ],
       ),
