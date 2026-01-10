@@ -179,59 +179,74 @@ class NotesWidget : GlanceAppWidget() {
                         )
                     )
                 }
-            } else if (memos.isEmpty()) {
-                // No memos found
-                Column(
-                    modifier = GlanceModifier
-                        .padding(top = 8.dp)
-                ) {
-                    Text(
-                        text = "No memos today",
-                        style = TextStyle(
-                            color = fontColor,
-                            fontSize = 14.sp
-                        )
-                    )
-                    Text(
-                        text = "Tap + to add one",
-                        style = TextStyle(
-                            color = secondaryColor,
-                            fontSize = 12.sp
-                        )
-                    )
-                }
             } else {
-                // Display memos list
+                // Content state (Empty or List)
+                val minRows = 4
+                val totalRows = maxOf(memos.size, minRows)
+                
                 LazyColumn(
                     modifier = GlanceModifier
                         .padding(top = 4.dp)
                 ) {
-                    items(memos.size) { index ->
-                        val memo = memos[index]
-                        Row(
-                            modifier = GlanceModifier
-                                .fillMaxWidth()
-                                .padding(vertical = 3.dp)
-                        ) {
-                            // Time badge
-                            Text(
-                                text = memo.time,
-                                style = TextStyle(
-                                    color = secondaryColor,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
-                                ),
-                                modifier = GlanceModifier.padding(end = 8.dp)
-                            )
-                            // Memo content
-                            Text(
-                                text = memo.content,
-                                style = TextStyle(
-                                    color = fontColor,
-                                    fontSize = 14.sp
-                                ),
-                                maxLines = 2
-                            )
+                    if (memos.isEmpty()) {
+                        item {
+                             Column(
+                                modifier = GlanceModifier
+                                    .padding(top = 8.dp)
+                            ) {
+                                Text(
+                                    text = "No memos today",
+                                    style = TextStyle(
+                                        color = fontColor,
+                                        fontSize = 14.sp
+                                    )
+                                )
+                                Text(
+                                    text = "Tap + to add one",
+                                    style = TextStyle(
+                                        color = secondaryColor,
+                                        fontSize = 12.sp
+                                    )
+                                )
+                            }
+                        }
+                        // Fill remaining space with spacers
+                        items(minRows - 1) { 
+                            Spacer(modifier = GlanceModifier.height(50.dp))
+                        }
+                    } else {
+                        items(totalRows) { index ->
+                            if (index < memos.size) {
+                                val memo = memos[index]
+                                Row(
+                                    modifier = GlanceModifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 3.dp)
+                                ) {
+                                    // Time badge
+                                    Text(
+                                        text = memo.time,
+                                        style = TextStyle(
+                                            color = secondaryColor,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium
+                                        ),
+                                        modifier = GlanceModifier.padding(end = 8.dp)
+                                    )
+                                    // Memo content
+                                    Text(
+                                        text = memo.content,
+                                        style = TextStyle(
+                                            color = fontColor,
+                                            fontSize = 14.sp
+                                        ),
+                                        maxLines = 2
+                                    )
+                                }
+                            } else {
+                                // Spacer Row to maintain height
+                                Spacer(modifier = GlanceModifier.height(50.dp))
+                            }
                         }
                     }
                 }
