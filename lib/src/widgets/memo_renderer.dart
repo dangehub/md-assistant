@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:io';
 
 /// A custom Markdown renderer that supports additional syntax:
 /// - ==highlight== for yellow background
@@ -48,12 +49,28 @@ class MemoRenderer extends StatelessWidget {
         'font': FontBuilder(),
         'u': UnderlineBuilder(),
       },
+      imageBuilder: (uri, title, alt) => _buildImage(uri, title, alt),
     );
   }
 
   /// Pre-process content to handle special cases
   String _preprocessContent(String content) {
     var result = content;
+
+    // Convert ![[filename]] into ![filename](filename)
+    // Supports optional pipe for resizing ![[filename|100]] -> ![filename|100](filename)
+    // Note: We ignore the size for now in the image builder logic, but preserving it in alt text is fine.
+    // We MUST encode the filename because Markdown specs don't support spaces in URLs without encoding.
+    result = result.replaceAllMapped(
+      RegExp(r'!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]'),
+      (match) {
+        final fileName = match.group(1)!;
+        final altText = match.group(2) ?? fileName;
+        // Encode spaces and special chars to allow markdown parsing
+        final encodedPath = Uri.encodeFull(fileName);
+        return '![$altText]($encodedPath)';
+      },
+    );
 
     // Convert ==text== to <mark>text</mark>
     result = result.replaceAllMapped(
@@ -71,6 +88,112 @@ class MemoRenderer extends StatelessWidget {
     if (uri != null && await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
+  }
+
+  Widget _buildImage(Uri uri, String? title, String? alt) {
+    // Decode the path to get the actual filename on disk (e.g. %20 -> space)
+    final src = Uri.decodeFull(uri.toString());
+
+    // Check if remote
+    if (src.startsWith('http')) {
+      return Image.network(src);
+    }
+
+    // Local file handling
+    if (vaultDirectory == null) {
+      return const SizedBox(); // Cannot resolve without vault dir
+    }
+
+    final File strictFile = File('$vaultDirectory/$src');
+    if (strictFile.existsSync()) {
+      return Image.file(strictFile);
+    }
+
+    // If direct lookup fails, try finding the file recursively (Shortest Path support)
+    return FutureBuilder<File?>(
+      future: _findFileRecursive(Directory(vaultDirectory!), src),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done) {
+          if (snapshot.data != null) {
+            return Image.file(snapshot.data!);
+          } else {
+            return _buildImageError(src);
+          }
+        }
+        // Show a small placeholder while searching
+        return Container(
+          width: 24,
+          height: 24,
+          padding: const EdgeInsets.all(4),
+          child: const CircularProgressIndicator(strokeWidth: 2),
+        );
+      },
+    );
+  }
+
+  Widget _buildImageError(String src) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+          border: Border.all(color: Colors.red.withOpacity(0.3)),
+          borderRadius: BorderRadius.circular(4)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.broken_image, size: 16, color: Colors.grey),
+          const SizedBox(width: 4),
+          Flexible(
+              child: Text('Not found: $src',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey))),
+        ],
+      ),
+    );
+  }
+
+  /// Recursively search for a file with [filename] in [dir].
+  /// Returns the first match found.
+  Future<File?> _findFileRecursive(Directory dir, String filename) async {
+    // Use runZoned or just async to avoid blocking main thread too much,
+    // though filesystem ops are somewhat blocking.
+    // For a deeper search, we might want to run this in an isolate,
+    // but for now simple async recursion is a good start.
+
+    try {
+      if (!await dir.exists()) return null;
+
+      final List<FileSystemEntity> entities = await dir.list().toList();
+
+      // 1. Check files in current dir first
+      for (final entity in entities) {
+        if (entity is File) {
+          // simple check: ends with separator + filename, or is just filename
+          // We use simple string match on the last segment
+          if (entity.path.endsWith(Platform.pathSeparator + filename) ||
+              entity.path.endsWith('/$filename') ||
+              entity.uri.pathSegments.last == filename) {
+            return entity;
+          }
+        }
+      }
+
+      // 2. Recurse into subdirectories
+      for (final entity in entities) {
+        if (entity is Directory) {
+          // Skip hidden directories (like .obsidian, .git)
+          final dirname = entity.uri.pathSegments.length > 1
+              ? entity.uri.pathSegments[entity.uri.pathSegments.length - 2]
+              : entity.path.split(Platform.pathSeparator).last;
+
+          if (dirname.startsWith('.')) continue;
+
+          final found = await _findFileRecursive(entity, filename);
+          if (found != null) return found;
+        }
+      }
+    } catch (e) {
+      // Ignore permission errors etc.
+    }
+    return null;
   }
 }
 
