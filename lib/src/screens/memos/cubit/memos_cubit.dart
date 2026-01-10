@@ -129,6 +129,34 @@ class MemosCubit extends Cubit<MemosState> {
     }
   }
 
+  /// Update an existing memo.
+  Future<bool> updateMemo(Memo memo, String newContent) async {
+    if (memo.sourcePath == null || memo.lineNumber == null) {
+      _logger.w('Cannot update memo: missing source info');
+      return false;
+    }
+
+    try {
+      final success = await MemoWriter.updateMemo(
+        memo.sourcePath!,
+        memo.lineNumber!,
+        newContent,
+        memo.dateTime,
+      );
+
+      if (success) {
+        // Reload memos to reflect the update
+        await loadMemos();
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      _logger.e('Error updating memo: $e');
+      return false;
+    }
+  }
+
   /// Refresh memos from disk.
   Future<void> refresh() async {
     await loadMemos();

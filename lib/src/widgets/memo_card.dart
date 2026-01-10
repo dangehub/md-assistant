@@ -8,6 +8,7 @@ class MemoCard extends StatelessWidget {
   final Memo memo;
   final VoidCallback? onDelete;
   final VoidCallback? onTap;
+  final VoidCallback? onDoubleTap;
   final String? vaultDirectory;
 
   const MemoCard({
@@ -15,6 +16,7 @@ class MemoCard extends StatelessWidget {
     required this.memo,
     this.onDelete,
     this.onTap,
+    this.onDoubleTap,
     this.vaultDirectory,
   });
 
@@ -35,6 +37,7 @@ class MemoCard extends StatelessWidget {
       ),
       child: InkWell(
         onTap: onTap,
+        onDoubleTap: onDoubleTap,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(12),

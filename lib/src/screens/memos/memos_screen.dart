@@ -13,6 +13,7 @@ import 'package:obsi/src/core/variable_resolver.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:path/path.dart' as p;
+import 'package:obsi/src/core/memos/memo.dart';
 
 /// The main Memos screen displaying all memos in a microblog-style view.
 class MemosScreen extends StatefulWidget {
@@ -37,11 +38,139 @@ class _MemosScreenState extends State<MemosScreen> {
 
   List<DateTime> _sortedDates = [];
 
+  // Editing State
+  Memo? _editingMemo;
+  List<String> _editingImages = [];
+
   @override
   void initState() {
     super.initState();
     _inputController.addListener(_onInputChanged);
+    _inputController.addListener(_extractImagesFromInput);
     _initVaultCache();
+  }
+
+  @override
+  void dispose() {
+    _inputController.removeListener(_onInputChanged);
+    _inputController.removeListener(_extractImagesFromInput);
+    _inputController.dispose();
+    _inputFocusNode.dispose();
+    _removeOverlay();
+    super.dispose();
+  }
+
+  void _extractImagesFromInput() {
+    if (_editingMemo == null) return;
+
+    final text = _inputController.text;
+    final matches = RegExp(r'!\[\[(.*?)\]\]').allMatches(text);
+    final images = matches.map((m) {
+      final content = m.group(1)!;
+      // Handle resizing syntax |size
+      final pipeIndex = content.indexOf('|');
+      return pipeIndex == -1 ? content : content.substring(0, pipeIndex);
+    }).toList();
+
+    if (_editingImages.length != images.length ||
+        !_listEquals(_editingImages, images)) {
+      setState(() {
+        _editingImages = images;
+      });
+    }
+  }
+
+  bool _listEquals(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  void _enterEditMode(Memo memo) {
+    setState(() {
+      _editingMemo = memo;
+      _inputController.text = memo.content;
+      _editingImages = [];
+    });
+    // Run extraction once immediately
+    _extractImagesFromInput();
+    _inputFocusNode.requestFocus();
+    // Move cursor to end
+    _inputController.selection =
+        TextSelection.collapsed(offset: memo.content.length);
+  }
+
+  void _exitEditMode() {
+    setState(() {
+      _editingMemo = null;
+      _editingImages = [];
+      _inputController.clear();
+    });
+    _inputFocusNode.unfocus();
+  }
+
+  Future<void> _deleteImageFile(String imagePath) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Image'),
+        content: const Text(
+            'Are you sure you want to delete this image? This will permanently delete the file from your vault.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final settings = SettingsController.getInstance();
+      final vaultDir = settings.vaultDirectory;
+      if (vaultDir == null) return;
+
+      final file = File(p.join(vaultDir, imagePath));
+      if (await file.exists()) {
+        try {
+          await file.delete();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Image deleted')),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to delete: $e')),
+            );
+          }
+        }
+      }
+    }
+  }
+
+  void _insertImageLink(String imagePath) {
+    final text = _inputController.text;
+    final selection = _inputController.selection;
+    final cursorPos = selection.isValid ? selection.baseOffset : text.length;
+
+    final insertText = '![[$imagePath]]';
+
+    final newText =
+        text.substring(0, cursorPos) + insertText + text.substring(cursorPos);
+
+    _inputController.text = newText;
+    _inputController.selection =
+        TextSelection.collapsed(offset: cursorPos + insertText.length);
+    _inputFocusNode.requestFocus();
   }
 
   Future<void> _initVaultCache() async {
@@ -57,15 +186,6 @@ class _MemosScreenState extends State<MemosScreen> {
     } else {
       debugPrint('VaultCache: No vault directory configured');
     }
-  }
-
-  @override
-  void dispose() {
-    _inputController.removeListener(_onInputChanged);
-    _inputController.dispose();
-    _inputFocusNode.dispose();
-    _removeOverlay();
-    super.dispose();
   }
 
   /// Listen for input changes to update autocomplete suggestions
@@ -476,7 +596,41 @@ class _MemosScreenState extends State<MemosScreen> {
         ),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Editing Indicator
+          if (_editingMemo != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.edit,
+                      size: 14, color: colorScheme.onPrimaryContainer),
+                  const SizedBox(width: 4),
+                  Text(
+                    '正在编辑 ${_formatDateTime(_editingMemo!.dateTime)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: _exitEditMode,
+                    child: Icon(Icons.close,
+                        size: 16, color: colorScheme.onPrimaryContainer),
+                  ),
+                ],
+              ),
+            ),
+
           // Input field
           Container(
             decoration: BoxDecoration(
@@ -489,7 +643,7 @@ class _MemosScreenState extends State<MemosScreen> {
               maxLines: null,
               minLines: 1,
               decoration: InputDecoration(
-                hintText: '你现在在想什么？',
+                hintText: _editingMemo != null ? '修改内容...' : '你现在在想什么？',
                 hintStyle: TextStyle(
                   color: colorScheme.onSurfaceVariant.withOpacity(0.6),
                 ),
@@ -501,7 +655,67 @@ class _MemosScreenState extends State<MemosScreen> {
               ),
             ),
           ),
+
+          // Thumbnails Panel (Only in Edit Mode)
+          if (_editingMemo != null && _editingImages.isNotEmpty)
+            Container(
+              height: 60,
+              margin: const EdgeInsets.only(top: 8),
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _editingImages.length,
+                separatorBuilder: (ctx, i) => const SizedBox(width: 8),
+                itemBuilder: (ctx, index) {
+                  final path = _editingImages[index];
+                  final vaultDir =
+                      SettingsController.getInstance().vaultDirectory;
+                  return Stack(
+                    children: [
+                      InkWell(
+                        onTap: () => _insertImageLink(path),
+                        child: Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            border:
+                                Border.all(color: colorScheme.outlineVariant),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: vaultDir != null
+                              ? Image.file(
+                                  File(p.join(vaultDir, path)),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (c, e, s) =>
+                                      const Icon(Icons.broken_image),
+                                )
+                              : const Icon(Icons.image),
+                        ),
+                      ),
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: InkWell(
+                          onTap: () => _deleteImageFile(path),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.5),
+                              shape: BoxShape.circle,
+                            ),
+                            padding: const EdgeInsets.all(2),
+                            child: const Icon(Icons.close,
+                                size: 12, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+
           const SizedBox(height: 8),
+
           // Action bar
           Row(
             children: [
@@ -556,8 +770,11 @@ class _MemosScreenState extends State<MemosScreen> {
                         horizontal: 16,
                         vertical: 8,
                       ),
+                      backgroundColor: _editingMemo != null
+                          ? colorScheme.tertiary
+                          : colorScheme.primary,
                     ),
-                    child: const Text('NOTE'),
+                    child: Text(_editingMemo != null ? 'UPDATE' : 'NOTE'),
                   );
                 },
               ),
@@ -566,6 +783,10 @@ class _MemosScreenState extends State<MemosScreen> {
         ],
       ),
     );
+  }
+
+  String _formatDateTime(DateTime dt) {
+    return DateFormat('yyyy-MM-dd HH:mm').format(dt);
   }
 
   Widget _buildMemosList(BuildContext context, MemosLoaded state) {
@@ -613,6 +834,7 @@ class _MemosScreenState extends State<MemosScreen> {
                             vaultDirectory: vaultDir,
                             onDelete: () =>
                                 context.read<MemosCubit>().deleteMemo(memo),
+                            onDoubleTap: () => _enterEditMode(memo),
                           )),
                     ],
                   );
@@ -843,27 +1065,61 @@ class _MemosScreenState extends State<MemosScreen> {
     if (content.isEmpty) return;
 
     final cubit = context.read<MemosCubit>();
-    final success = await cubit.addMemo(content);
 
-    if (success && mounted) {
-      _inputController.clear();
-      _inputFocusNode.unfocus();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Memo added'),
-          duration: Duration(seconds: 1),
-        ),
-      );
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Failed to add memo'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
+    if (_editingMemo != null) {
+      // Update existing
+      final success = await cubit.updateMemo(_editingMemo!, content);
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Memo updated'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+        _exitEditMode();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Failed to update memo'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } else {
+      // Add new
+      final success = await cubit.addMemo(content);
+
+      if (success && mounted) {
+        _inputController.clear();
+        _inputFocusNode.unfocus();
+
+        // Scroll to top
+        if (_itemScrollController.isAttached) {
+          _itemScrollController.scrollTo(
+            index: 0,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Memo added'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Failed to add memo'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
     }
   }
-}
+} // End of _MemosScreenState
 
 /// A stateful calendar picker that supports year/month jumping and "back to today".
 class _MemosCalendarPicker extends StatefulWidget {

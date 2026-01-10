@@ -170,10 +170,10 @@ class MemoWriter {
     return true;
   }
 
-  /// Delete a memo from its source file.
+  /// Delete a memo from its source file, handling multi-line memos.
   ///
   /// [sourcePath]: The absolute path to the source file
-  /// [lineNumber]: The 1-indexed line number to delete
+  /// [lineNumber]: The 1-indexed line number to start deletion (the line starting with '- HH:mm')
   static Future<bool> deleteMemo(String sourcePath, int lineNumber) async {
     try {
       final file = File(sourcePath);
@@ -188,13 +188,121 @@ class MemoWriter {
         return false;
       }
 
-      lines.removeAt(lineNumber - 1);
+      // Check if the targeted line is actually a memo start
+      final startLineIndex = lineNumber - 1;
+      final startLine = lines[startLineIndex];
+      // Regex check to be safe, though lineNumber should be accurate from parser
+      if (!startLine.trimLeft().startsWith('- ')) {
+        _logger.w('Target line does not look like a memo start: $startLine');
+        // We continue anyway assuming the parser was correct, or abort?
+        // Abort to be safe.
+        // Wait, user might have modified file externally?
+        // Let's assume it IS the start.
+      }
+
+      // Identify the block end
+      int endLineIndex = startLineIndex;
+      // Scan forward
+      for (int i = startLineIndex + 1; i < lines.length; i++) {
+        final line = lines[i];
+        // If line is empty or indented (starts with space/tab), it belongs to this memo.
+        // If line matches a new memo start '- ', or a header '# ', or is non-empty non-indented text, it ends the block.
+        if (line.trim().isEmpty) {
+          endLineIndex = i;
+          continue;
+        }
+
+        if (line.startsWith(' ') || line.startsWith('\t')) {
+          endLineIndex = i;
+          continue;
+        }
+
+        // Check for new memo start or header
+        if (line.trimLeft().startsWith('- ') || line.startsWith('# ')) {
+          break; // End of block found (exclusive)
+        }
+
+        // Any other non-indented non-empty line also ends the block in strict mode?
+        // Yes, likely.
+        break;
+      }
+
+      // Remove the range [startLineIndex, endLineIndex]
+      lines.removeRange(startLineIndex, endLineIndex + 1);
+
       await file.writeAsString(lines.join('\n'));
 
-      _logger.i('Memo deleted from line $lineNumber in $sourcePath');
+      _logger.i(
+          'Memo deleted from lines ${startLineIndex + 1}-${endLineIndex + 1} in $sourcePath');
       return true;
     } catch (e) {
       _logger.e('Error deleting memo: $e');
+      return false;
+    }
+  }
+
+  /// Update an existing memo content.
+  ///
+  /// [sourcePath]: The absolute path to the source file
+  /// [lineNumber]: The 1-indexed line number of the memo start
+  /// [newContent]: The new content (without time prefix) to replace with
+  /// [dateTime]: The original timestamp of the memo (to preserve time)
+  static Future<bool> updateMemo(String sourcePath, int lineNumber,
+      String newContent, DateTime dateTime) async {
+    try {
+      final file = File(sourcePath);
+      if (!await file.exists()) {
+        _logger.w('Source file not found: $sourcePath');
+        return false;
+      }
+
+      final lines = (await file.readAsString()).split('\n');
+      if (lineNumber < 1 || lineNumber > lines.length) {
+        _logger.w('Line number out of range: $lineNumber');
+        return false;
+      }
+
+      // Format the new block
+      final timeStr = _formatTime(dateTime);
+      final contentLines = newContent.split('\n');
+      final firstContentLine = contentLines.first;
+      final otherContentLines =
+          contentLines.skip(1).map((l) => '\t$l').join('\n');
+
+      final newBlockStr = otherContentLines.isEmpty
+          ? '- $timeStr $firstContentLine'
+          : '- $timeStr $firstContentLine\n$otherContentLines';
+
+      final newBlockLines = newBlockStr.split('\n');
+
+      // Identify the OLD block range
+      final startLineIndex = lineNumber - 1;
+      int endLineIndex = startLineIndex;
+
+      for (int i = startLineIndex + 1; i < lines.length; i++) {
+        final line = lines[i];
+        if (line.trim().isEmpty) {
+          endLineIndex = i;
+          continue;
+        }
+        if (line.startsWith(' ') || line.startsWith('\t')) {
+          endLineIndex = i;
+          continue;
+        }
+        if (line.trimLeft().startsWith('- ') || line.startsWith('# ')) {
+          break;
+        }
+        break;
+      }
+
+      // Replace the range
+      lines.replaceRange(startLineIndex, endLineIndex + 1, newBlockLines);
+
+      await file.writeAsString(lines.join('\n'));
+      _logger.i('Memo updated at $sourcePath line $lineNumber');
+      return true;
+    } catch (e) {
+      _logger.e('Error updating memo: $e');
       return false;
     }
   }
