@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:obsi/src/screens/memos/cubit/memos_cubit.dart';
 import 'package:obsi/src/screens/settings/settings_controller.dart';
 import 'package:obsi/src/widgets/memo_card.dart';
+import 'package:obsi/src/core/vault_cache_service.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -22,13 +23,266 @@ class _MemosScreenState extends State<MemosScreen> {
   final ItemPositionsListener _itemPositionsListener =
       ItemPositionsListener.create();
 
+  // Autocomplete state
+  OverlayEntry? _overlayEntry;
+  List<String> _suggestions = [];
+  String _autocompleteType = ''; // 'tag' or 'wiki'
+  final GlobalKey _inputFieldKey = GlobalKey();
+
   List<DateTime> _sortedDates = [];
 
   @override
+  void initState() {
+    super.initState();
+    _inputController.addListener(_onInputChanged);
+    _initVaultCache();
+  }
+
+  Future<void> _initVaultCache() async {
+    final settingsController = SettingsController.getInstance();
+    final vaultDir = settingsController.vaultDirectory;
+    debugPrint('VaultCache: vaultDir = $vaultDir');
+    if (vaultDir != null && vaultDir.isNotEmpty) {
+      // Force rescan for now to debug
+      debugPrint('VaultCache: Scanning vault...');
+      await VaultCacheService.instance.scanVault(vaultDir);
+      debugPrint(
+          'VaultCache: Found ${VaultCacheService.instance.wikiLinks.length} wiki links, ${VaultCacheService.instance.tags.length} tags');
+    } else {
+      debugPrint('VaultCache: No vault directory configured');
+    }
+  }
+
+  @override
   void dispose() {
+    _inputController.removeListener(_onInputChanged);
     _inputController.dispose();
     _inputFocusNode.dispose();
+    _removeOverlay();
     super.dispose();
+  }
+
+  /// Listen for input changes to update autocomplete suggestions
+  void _onInputChanged() {
+    final text = _inputController.text;
+    final selection = _inputController.selection;
+
+    if (!selection.isValid || selection.baseOffset != selection.extentOffset) {
+      _removeOverlay();
+      return;
+    }
+
+    final cursorPos = selection.baseOffset;
+
+    // Check if we're inside a tag
+    final tagMatch = _findTagAtCursor(text, cursorPos);
+    if (tagMatch != null) {
+      _showSuggestions(tagMatch, 'tag');
+      return;
+    }
+
+    // Check if we're inside a wiki link
+    final wikiMatch = _findWikiLinkAtCursor(text, cursorPos);
+    if (wikiMatch != null) {
+      _showSuggestions(wikiMatch, 'wiki');
+      return;
+    }
+
+    _removeOverlay();
+  }
+
+  /// Find tag pattern at cursor position
+  String? _findTagAtCursor(String text, int cursorPos) {
+    // Look backwards for #
+    int start = cursorPos - 1;
+    while (start >= 0 &&
+        text[start] != '#' &&
+        text[start] != ' ' &&
+        text[start] != '\n') {
+      start--;
+    }
+    if (start >= 0 && text[start] == '#') {
+      return text.substring(start + 1, cursorPos);
+    }
+    return null;
+  }
+
+  /// Find wiki link pattern at cursor position
+  String? _findWikiLinkAtCursor(String text, int cursorPos) {
+    // Look for [[ before cursor
+    int start = cursorPos - 1;
+    while (start >= 1) {
+      if (text[start] == '[' && text[start - 1] == '[') {
+        // Check there's no ]] between start and cursor
+        final substr = text.substring(start + 1, cursorPos);
+        if (!substr.contains(']]')) {
+          return substr;
+        }
+        break;
+      }
+      if (text[start] == ']') break; // Found closing bracket, not inside link
+      start--;
+    }
+    return null;
+  }
+
+  /// Show autocomplete suggestions overlay
+  void _showSuggestions(String query, String type) {
+    _autocompleteType = type;
+
+    if (type == 'tag') {
+      _suggestions = VaultCacheService.instance.searchTags(query, limit: 5);
+    } else {
+      _suggestions =
+          VaultCacheService.instance.searchWikiLinks(query, limit: 5);
+    }
+
+    if (_suggestions.isEmpty) {
+      _removeOverlay();
+      return;
+    }
+
+    _removeOverlay();
+    _overlayEntry = _createOverlayEntry();
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  /// Remove the overlay
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  /// Create the overlay entry for suggestions
+  OverlayEntry _createOverlayEntry() {
+    final renderBox =
+        _inputFieldKey.currentContext?.findRenderObject() as RenderBox?;
+    final size = renderBox?.size ?? Size.zero;
+    final offset = renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+
+    return OverlayEntry(
+      builder: (context) => Positioned(
+        left: offset.dx + 12,
+        top: offset.dy + size.height + 4,
+        width: size.width - 24,
+        child: Material(
+          elevation: 4,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            constraints: const BoxConstraints(maxHeight: 200),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+            ),
+            child: ListView.builder(
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              itemCount: _suggestions.length,
+              itemBuilder: (context, index) {
+                final suggestion = _suggestions[index];
+                return ListTile(
+                  dense: true,
+                  title: Text(
+                    _autocompleteType == 'tag'
+                        ? '#$suggestion'
+                        : '[[$suggestion]]',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  onTap: () => _applySuggestion(suggestion),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Apply the selected suggestion
+  void _applySuggestion(String suggestion) {
+    final text = _inputController.text;
+    final selection = _inputController.selection;
+    final cursorPos = selection.baseOffset;
+
+    String newText;
+    int newCursorPos;
+
+    if (_autocompleteType == 'tag') {
+      // Find start of tag
+      int start = cursorPos - 1;
+      while (start >= 0 && text[start] != '#') {
+        start--;
+      }
+      newText =
+          text.substring(0, start + 1) + suggestion + text.substring(cursorPos);
+      newCursorPos = start + 1 + suggestion.length;
+
+      // Record usage
+      VaultCacheService.instance.recordTagUsage(suggestion);
+    } else {
+      // Find start of wiki link
+      int start = cursorPos - 1;
+      while (start >= 1 && !(text[start] == '[' && text[start - 1] == '[')) {
+        start--;
+      }
+      // Check if there's already a closing ]]
+      int end = cursorPos;
+      if (end + 1 < text.length && text[end] == ']' && text[end + 1] == ']') {
+        newText =
+            text.substring(0, start + 1) + suggestion + text.substring(end);
+      } else {
+        newText = text.substring(0, start + 1) +
+            suggestion +
+            ']]' +
+            text.substring(cursorPos);
+      }
+      newCursorPos = start + 1 + suggestion.length + 2;
+
+      // Record usage
+      VaultCacheService.instance.recordWikiLinkUsage(suggestion);
+    }
+
+    _inputController.text = newText;
+    _inputController.selection = TextSelection.collapsed(offset: newCursorPos);
+    _removeOverlay();
+  }
+
+  /// Insert # at cursor and show tag suggestions
+  void _insertTagSymbol() {
+    final text = _inputController.text;
+    final selection = _inputController.selection;
+    final cursorPos = selection.isValid ? selection.baseOffset : text.length;
+
+    final newText =
+        text.substring(0, cursorPos) + '#' + text.substring(cursorPos);
+    _inputController.text = newText;
+    _inputController.selection = TextSelection.collapsed(offset: cursorPos + 1);
+    _inputFocusNode.requestFocus();
+
+    // Show recent tags immediately
+    _showSuggestions('', 'tag');
+  }
+
+  /// Insert [[]] at cursor and show wiki link suggestions
+  void _insertWikiLink() {
+    final text = _inputController.text;
+    final selection = _inputController.selection;
+    final cursorPos = selection.isValid ? selection.baseOffset : text.length;
+
+    final newText =
+        text.substring(0, cursorPos) + '[[]]' + text.substring(cursorPos);
+    _inputController.text = newText;
+    _inputController.selection =
+        TextSelection.collapsed(offset: cursorPos + 2); // Cursor inside [[|]]
+    _inputFocusNode.requestFocus();
+
+    // Show recent wiki links immediately
+    _showSuggestions('', 'wiki');
   }
 
   @override
@@ -79,6 +333,7 @@ class _MemosScreenState extends State<MemosScreen> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
+      key: _inputFieldKey,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colorScheme.surface,
@@ -118,29 +373,25 @@ class _MemosScreenState extends State<MemosScreen> {
           // Action bar
           Row(
             children: [
-              // Tag button
+              // Tag button (#)
               IconButton(
                 icon: Icon(
                   Icons.tag,
                   color: colorScheme.onSurfaceVariant,
                   size: 20,
                 ),
-                onPressed: () {
-                  // TODO: Tag insertion
-                },
-                tooltip: 'Add tag',
+                onPressed: _insertTagSymbol,
+                tooltip: '插入标签 #',
               ),
-              // Attachment button
+              // Wiki link button ([[]])
               IconButton(
                 icon: Icon(
-                  Icons.attach_file,
+                  Icons.link,
                   color: colorScheme.onSurfaceVariant,
                   size: 20,
                 ),
-                onPressed: () {
-                  // TODO: Attachment
-                },
-                tooltip: 'Attach file',
+                onPressed: _insertWikiLink,
+                tooltip: '插入链接 [[]]',
               ),
               // Calendar navigation button
               IconButton(
@@ -150,7 +401,7 @@ class _MemosScreenState extends State<MemosScreen> {
                   size: 20,
                 ),
                 onPressed: () => _showCalendarPicker(context),
-                tooltip: 'Jump to date',
+                tooltip: '跳转到日期',
               ),
               const Spacer(),
               // Note button (submit)
