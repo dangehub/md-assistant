@@ -27,8 +27,12 @@ class MemoRenderer extends StatelessWidget {
 
     return MarkdownBody(
       data: processedContent,
+      // Treat single newlines as hard breaks (Obsidian behavior)
+      softLineBreak: true,
       styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
         p: baseStyle ?? Theme.of(context).textTheme.bodyMedium,
+        // Ensure visible spacing between paragraphs/blocks
+        blockSpacing: 12.0,
         a: TextStyle(
           color: Theme.of(context).colorScheme.primary,
           decoration: TextDecoration.underline,

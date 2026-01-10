@@ -36,6 +36,11 @@ class _SettingsViewState extends State<SettingsView> {
   final _memosPathController = TextEditingController();
   final _memosAttachmentDirController = TextEditingController();
 
+  // Image Compression State
+  bool _imageCompressionEnabled = true;
+  int _imageCompressionQuality = 75;
+  String _imageCompressionFormat = 'webp';
+
   @override
   void initState() {
     _dateTemplateController.text = widget.controller.dateTemplate;
@@ -46,6 +51,7 @@ class _SettingsViewState extends State<SettingsView> {
     _aiModelNameController.text = widget.controller.aiModelName ?? "";
     _memosPathController.text = widget.controller.memosPath ?? "";
     _loadMemosAttachmentDir();
+    _loadImageCompressionSettings();
 
     _dateTemplateController.addListener(() {
       widget.controller.updateDateTemplate(_dateTemplateController.text);
@@ -72,6 +78,44 @@ class _SettingsViewState extends State<SettingsView> {
   Future<void> _saveMemosAttachmentDir(String value) async {
     final service = SettingsService();
     await service.updateMemosAttachmentDirectory(value);
+  }
+
+  Future<void> _loadImageCompressionSettings() async {
+    final service = SettingsService();
+    final enabled = await service.imageCompressionEnabled();
+    final quality = await service.imageCompressionQuality();
+    final format = await service.imageCompressionFormat();
+    if (mounted) {
+      setState(() {
+        _imageCompressionEnabled = enabled;
+        _imageCompressionQuality = quality;
+        _imageCompressionFormat = format;
+      });
+    }
+  }
+
+  Future<void> _updateImageCompressionEnabled(bool value) async {
+    final service = SettingsService();
+    await service.updateImageCompressionEnabled(value);
+    setState(() {
+      _imageCompressionEnabled = value;
+    });
+  }
+
+  Future<void> _updateImageCompressionQuality(int value) async {
+    final service = SettingsService();
+    await service.updateImageCompressionQuality(value);
+    setState(() {
+      _imageCompressionQuality = value;
+    });
+  }
+
+  Future<void> _updateImageCompressionFormat(String value) async {
+    final service = SettingsService();
+    await service.updateImageCompressionFormat(value);
+    setState(() {
+      _imageCompressionFormat = value;
+    });
   }
 
   @override
@@ -332,6 +376,65 @@ class _SettingsViewState extends State<SettingsView> {
                         _saveMemosAttachmentDir(value);
                       },
                     ),
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    const Text("Image Compression",
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text("Enable Compression"),
+                      subtitle:
+                          const Text("Compress images before saving to vault"),
+                      value: _imageCompressionEnabled,
+                      onChanged: _updateImageCompressionEnabled,
+                    ),
+                    if (_imageCompressionEnabled) ...[
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        value: _imageCompressionFormat,
+                        decoration: const InputDecoration(
+                          labelText: "Format",
+                          border: OutlineInputBorder(),
+                          contentPadding:
+                              EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'webp', child: Text('WebP (Recommended)')),
+                          DropdownMenuItem(value: 'jpeg', child: Text('JPEG')),
+                          DropdownMenuItem(value: 'png', child: Text('PNG')),
+                        ],
+                        onChanged: (value) {
+                          if (value != null)
+                            _updateImageCompressionFormat(value);
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          const Text("Quality: "),
+                          Expanded(
+                            child: Slider(
+                              value: _imageCompressionQuality.toDouble(),
+                              min: 1,
+                              max: 100,
+                              divisions: 99,
+                              label: _imageCompressionQuality.toString(),
+                              onChanged: (value) {
+                                _updateImageCompressionQuality(value.round());
+                              },
+                            ),
+                          ),
+                          SizedBox(
+                            width: 40,
+                            child: Text(
+                              "$_imageCompressionQuality%",
+                              textAlign: TextAlign.end,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ])),
           Padding(
               padding: const EdgeInsets.all(16),

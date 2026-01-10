@@ -438,4 +438,39 @@ class SettingsService {
       sharedPreferences.setString(_memosAttachmentDirectoryKey, directory);
     }
   }
+
+  // Image Compression Settings
+  static const String _imageCompressionEnabledKey = "image_compression_enabled";
+  static const String _imageCompressionQualityKey = "image_compression_quality";
+  static const String _imageCompressionFormatKey = "image_compression_format";
+
+  Future<bool> imageCompressionEnabled() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getBool(_imageCompressionEnabledKey) ?? true;
+  }
+
+  Future<void> updateImageCompressionEnabled(bool enabled) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    await sharedPreferences.setBool(_imageCompressionEnabledKey, enabled);
+  }
+
+  Future<int> imageCompressionQuality() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getInt(_imageCompressionQualityKey) ?? 75;
+  }
+
+  Future<void> updateImageCompressionQuality(int quality) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    await sharedPreferences.setInt(_imageCompressionQualityKey, quality);
+  }
+
+  Future<String> imageCompressionFormat() async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    return sharedPreferences.getString(_imageCompressionFormatKey) ?? 'webp';
+  }
+
+  Future<void> updateImageCompressionFormat(String format) async {
+    var sharedPreferences = await SharedPreferences.getInstance();
+    await sharedPreferences.setString(_imageCompressionFormatKey, format);
+  }
 }

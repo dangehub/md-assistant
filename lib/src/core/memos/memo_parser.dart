@@ -162,7 +162,7 @@ class MemoParser {
 
   /// Regex to match memo lines: `- HH:mm(:ss)? content`
   static final _memoPattern =
-      RegExp(r'^-\s+(\d{1,2}:\d{2}(?::\d{2})?)\s+(.+)$', multiLine: true);
+      RegExp(r'^-\s+(\d{1,2}:\d{2}(?::\d{2})?)(?:\s+(.*))?$', multiLine: true);
 
   /// Regex to match date headers: `# YYYY-MM-DD` or similar
   static final _dateHeaderPattern =
@@ -219,14 +219,21 @@ class MemoParser {
       final lines = content.split('\n');
 
       DateTime? currentDate;
-      int lineNumber = 0;
+      MemoBuilder? currentMemoBuilder;
 
+      int lineNumber = 0;
       for (final line in lines) {
         lineNumber++;
 
-        // Check for date header
+        // 1. Check for date header
         final headerMatch = _dateHeaderPattern.firstMatch(line);
         if (headerMatch != null) {
+          // Finish current memo if exists
+          if (currentMemoBuilder != null) {
+            memos.add(currentMemoBuilder.build());
+            currentMemoBuilder = null;
+          }
+
           final dateStr = headerMatch.group(1)!;
           currentDate = DateTime.tryParse(dateStr);
           continue;
@@ -235,20 +242,83 @@ class MemoParser {
         // Skip if no current date context
         if (currentDate == null) continue;
 
-        // Check for memo line
+        // 2. Check for new memo line
         final memoMatch = _memoPattern.firstMatch(line);
         if (memoMatch != null) {
-          final timeStr = memoMatch.group(1)!;
-          final contentText = memoMatch.group(2)!;
+          // Finish previous memo
+          if (currentMemoBuilder != null) {
+            memos.add(currentMemoBuilder.build());
+          }
 
-          memos.add(Memo.fromParsed(
+          final timeStr = memoMatch.group(1)!;
+          final contentText = memoMatch.group(2) ?? '';
+
+          currentMemoBuilder = MemoBuilder(
             date: currentDate,
             timeString: timeStr,
             content: contentText,
             sourcePath: fullPath,
             lineNumber: lineNumber,
-          ));
+          );
+          continue;
         }
+
+        // 3. Check for indented line (continuation)
+        if (currentMemoBuilder != null) {
+          // Check if line is indented (tab or spaces) OR empty (assuming empty lines part of block)
+          // But usually we only treat indented lines as part of the block in this strict format
+          // However, standard markdown list items include subsequent text if indented.
+          // Thino implies indentation.
+          if (line.trim().isEmpty) {
+            currentMemoBuilder.addContent('\n');
+          } else if (line.startsWith(' ') || line.startsWith('\t')) {
+            // Remove ONE level of indentation? Or just keep raw?
+            // Usually we want to keep the raw content but strip the list indentation.
+            // If we strip, we might break nested lists.
+            // For now, let's strip the leading indentation that matches the list item level.
+            // Assuming 1 tab or 4 spaces or 2 spaces.
+            // Simple approach: trim left? No, that ruins code blocks.
+            // Approach: Regex replace first match of `^\s+`? No.
+            // Let's just append the line with a newline logic to the content.
+            // Note: The content in Memo object usually shouldn't have the indentation of the list structure?
+            // Or should it?
+            // If I display it, I want "Line 2" not "    Line 2".
+            // So I should verify what Thino does.
+            // User's example:
+            // - 15:40
+            //     ![[...]]
+            // The parsing result content should probably be just "![[...]]" (without indentation).
+            // So I will trim leading whitespace if it looks like structure indentation.
+
+            // Common behavior: simple trimLeft() might be too aggressive if user intended indentation.
+            // But for getting it working, `trimLeft` or removing `\t` / `  ` is safer.
+            // Let's try removing common indentation patterns.
+            var processedLine = line;
+            if (processedLine.startsWith('\t')) {
+              processedLine = processedLine.substring(1);
+            } else if (processedLine.startsWith('    ')) {
+              processedLine = processedLine.substring(4);
+            } else if (processedLine.startsWith('  ')) {
+              processedLine = processedLine.substring(2);
+            }
+
+            currentMemoBuilder.addContent('\n$processedLine');
+          } else {
+            // Non-indented line -> End of memo block?
+            // If it's not a memo start, and not a header, and not indented...
+            // It might be just some text in the file.
+            // We should probably stop capturing current memo.
+            if (currentMemoBuilder != null) {
+              memos.add(currentMemoBuilder.build());
+              currentMemoBuilder = null;
+            }
+          }
+        }
+      }
+
+      // End of file, add last memo
+      if (currentMemoBuilder != null) {
+        memos.add(currentMemoBuilder.build());
       }
     } catch (e) {
       _logger.e('Error parsing static memos file: $e');
@@ -273,25 +343,7 @@ class MemoParser {
 
       try {
         final content = await file.readAsString();
-        final lines = content.split('\n');
-        int lineNumber = 0;
-
-        for (final line in lines) {
-          lineNumber++;
-          final memoMatch = _memoPattern.firstMatch(line);
-          if (memoMatch != null) {
-            final timeStr = memoMatch.group(1)!;
-            final contentText = memoMatch.group(2)!;
-
-            memos.add(Memo.fromParsed(
-              date: date,
-              timeString: timeStr,
-              content: contentText,
-              sourcePath: file.path,
-              lineNumber: lineNumber,
-            ));
-          }
-        }
+        memos.addAll(parseFromContent(content, date, sourcePath: file.path));
       } catch (e) {
         _logger.e('Error parsing dynamic memo file ${file.path}: $e');
       }
@@ -379,25 +431,88 @@ class MemoParser {
       {String? sourcePath}) {
     final memos = <Memo>[];
     final lines = content.split('\n');
+    MemoBuilder? currentMemoBuilder;
     int lineNumber = 0;
 
     for (final line in lines) {
       lineNumber++;
+
       final memoMatch = _memoPattern.firstMatch(line);
       if (memoMatch != null) {
-        final timeStr = memoMatch.group(1)!;
-        final contentText = memoMatch.group(2)!;
+        if (currentMemoBuilder != null) {
+          memos.add(currentMemoBuilder.build());
+        }
 
-        memos.add(Memo.fromParsed(
+        final timeStr = memoMatch.group(1)!;
+        final contentText = memoMatch.group(2) ?? '';
+
+        currentMemoBuilder = MemoBuilder(
           date: date,
           timeString: timeStr,
           content: contentText,
           sourcePath: sourcePath,
           lineNumber: lineNumber,
-        ));
+        );
+      } else if (currentMemoBuilder != null) {
+        // Continuation logic
+        if (line.trim().isEmpty) {
+          currentMemoBuilder.addContent('\n');
+        } else if (line.startsWith(' ') || line.startsWith('\t')) {
+          var processedLine = line;
+          if (processedLine.startsWith('\t')) {
+            processedLine = processedLine.substring(1);
+          } else if (processedLine.startsWith('    ')) {
+            processedLine = processedLine.substring(4);
+          } else if (processedLine.startsWith('  ')) {
+            processedLine = processedLine.substring(2);
+          }
+          currentMemoBuilder.addContent('\n$processedLine');
+        } else {
+          // End of block
+          if (currentMemoBuilder != null) {
+            memos.add(currentMemoBuilder.build());
+            currentMemoBuilder = null;
+          }
+        }
       }
     }
 
+    // Add last memo
+    if (currentMemoBuilder != null) {
+      memos.add(currentMemoBuilder.build());
+    }
+
     return memos;
+  }
+}
+
+/// Helper class to build multi-line memos
+class MemoBuilder {
+  final DateTime date;
+  final String timeString;
+  String content;
+  final String? sourcePath;
+  final int lineNumber;
+
+  MemoBuilder({
+    required this.date,
+    required this.timeString,
+    required this.content,
+    this.sourcePath,
+    required this.lineNumber,
+  });
+
+  void addContent(String more) {
+    content += more;
+  }
+
+  Memo build() {
+    return Memo.fromParsed(
+      date: date,
+      timeString: timeString,
+      content: content.trimRight(), // Trim trailing newlines
+      sourcePath: sourcePath,
+      lineNumber: lineNumber,
+    );
   }
 }

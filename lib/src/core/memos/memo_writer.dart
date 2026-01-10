@@ -31,7 +31,16 @@ class MemoWriter {
     dateTime ??= DateTime.now();
 
     final timeStr = _formatTime(dateTime);
-    final memoLine = '- $timeStr $content';
+
+    // Handle multi-line content with indentation
+    final lines = content.split('\n');
+    final firstLine = lines.first;
+    // Use tab indentation for subsequent lines to match Thino/Obsidian behavior
+    final otherLines = lines.skip(1).map((l) => '\t$l').join('\n');
+
+    final memoLine = otherLines.isEmpty
+        ? '- $timeStr $firstLine'
+        : '- $timeStr $firstLine\n$otherLines';
 
     try {
       if (isDynamic) {

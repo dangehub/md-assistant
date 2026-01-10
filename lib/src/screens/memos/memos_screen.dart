@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:obsi/src/screens/memos/cubit/memos_cubit.dart';
 import 'package:obsi/src/screens/settings/settings_controller.dart';
 import 'package:obsi/src/screens/settings/settings_service.dart';
@@ -341,16 +342,46 @@ class _MemosScreenState extends State<MemosScreen> {
         await targetDir.create(recursive: true);
       }
 
-      // Generate unique filename with timestamp
+      // Check compression settings
+      final compressEnabled = await settingsService.imageCompressionEnabled();
+      final compressQuality = await settingsService.imageCompressionQuality();
+      final compressFormatStr = await settingsService.imageCompressionFormat();
+
+      // Generate unique filename and determine format
       final originalName = p.basename(pickedFile.path);
-      final extension = p.extension(originalName);
+      var extension = p.extension(originalName);
+
+      CompressFormat? targetFormat;
+      if (compressEnabled) {
+        if (compressFormatStr == 'webp') {
+          targetFormat = CompressFormat.webp;
+          extension = '.webp';
+        } else if (compressFormatStr == 'jpeg') {
+          targetFormat = CompressFormat.jpeg;
+          extension = '.jpg';
+        } else if (compressFormatStr == 'png') {
+          targetFormat = CompressFormat.png;
+          extension = '.png';
+        }
+      }
+
       final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
       final newFileName = 'attachment_$timestamp$extension';
       final targetPath = p.join(targetDirPath, newFileName);
 
-      // Copy file to target directory
-      final File sourceFile = File(pickedFile.path);
-      await sourceFile.copy(targetPath);
+      // Compress or Copy file
+      if (compressEnabled && targetFormat != null) {
+        final result = await FlutterImageCompress.compressAndGetFile(
+          pickedFile.path,
+          targetPath,
+          quality: compressQuality,
+          format: targetFormat,
+        );
+        if (result == null) throw Exception("Image compression failed");
+      } else {
+        final File sourceFile = File(pickedFile.path);
+        await sourceFile.copy(targetPath);
+      }
 
       // Insert markdown at cursor
       final text = _inputController.text;
