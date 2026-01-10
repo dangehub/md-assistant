@@ -14,6 +14,8 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:path/path.dart' as p;
 import 'package:obsi/src/core/memos/memo.dart';
+import 'package:obsi/src/core/memos/memo_aggregator.dart';
+import 'package:obsi/src/core/memos/publish_service.dart';
 
 /// The main Memos screen displaying all memos in a microblog-style view.
 class MemosScreen extends StatefulWidget {
@@ -344,9 +346,11 @@ class _MemosScreenState extends State<MemosScreen> {
       while (start >= 0 && text[start] != '#') {
         start--;
       }
-      newText =
-          text.substring(0, start + 1) + suggestion + text.substring(cursorPos);
-      newCursorPos = start + 1 + suggestion.length;
+      newText = text.substring(0, start + 1) +
+          suggestion +
+          ' ' +
+          text.substring(cursorPos);
+      newCursorPos = start + 1 + suggestion.length + 1; // +1 for the space
 
       // Record usage
       VaultCacheService.instance.recordTagUsage(suggestion);
@@ -537,11 +541,173 @@ class _MemosScreenState extends State<MemosScreen> {
     }
   }
 
+  Future<void> _onPublishPressed(BuildContext context) async {
+    final settingsService = SettingsService();
+    // 1. Check Configuration
+    final repoUrl = await settingsService.microblogRepoUrl();
+    final repoToken = await settingsService.microblogRepoToken();
+    final repoPath = await settingsService.microblogRepoPath();
+    final tag = await settingsService.microblogTag();
+
+    if (repoUrl.isEmpty || repoToken.isEmpty || repoPath.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('请先在设置中配置微博发布信息 (Repo, Token, Path)'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    // 2. Confirm
+    if (context.mounted) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('发布微博客'),
+          content: Text('即将聚合带有 $tag 的 Memos 并推送到 GitHub。\n确定继续吗？'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('取消')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('发布'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
+    if (!context.mounted) return;
+
+    // 3. Show Loading
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(children: [
+          SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2)),
+          SizedBox(width: 12),
+          Text('正在生成并推送...'),
+        ]),
+        duration: Duration(minutes: 1), // Long duration, we'll hide it later
+      ),
+    );
+
+    try {
+      // 4. Aggregate
+      final aggregator = MemoAggregator();
+      final result = await aggregator.aggregate();
+
+      // 5. Push Content
+      final publisher = PublishService();
+
+      // Update loading status
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(children: [
+              SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2)),
+              SizedBox(width: 12),
+              Text('正在推送内容...'),
+            ]),
+            duration: Duration(seconds: 30),
+          ),
+        );
+      }
+
+      await publisher.publishFile(
+        file: result.file,
+        repoUrl: repoUrl,
+        repoToken: repoToken,
+        targetPath: repoPath,
+      );
+
+      // 6. Push Assets
+      String assetMessage = '没有附件更新';
+      if (result.assets.isNotEmpty) {
+        final assetFiles = result.assets.map((e) => e.localFile).toList();
+        final assetPaths = result.assets.map((e) => e.remotePath).toList();
+
+        final uploadedCount = await publisher.publishAssets(
+          files: assetFiles,
+          remotePaths: assetPaths,
+          repoUrl: repoUrl,
+          repoToken: repoToken,
+          onProgress: (current, total, message) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(children: [
+                    const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text('附件 ($current/$total): $message'),
+                    ),
+                  ]),
+                  duration: const Duration(seconds: 30),
+                ),
+              );
+            }
+          },
+        );
+        assetMessage = '新增 $uploadedCount 个附件';
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('发布成功！$assetMessage'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('发布失败: $e'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (context) => MemosCubit(),
       child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Memos'),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.cloud_upload_outlined),
+              tooltip: '发布微博客',
+              onPressed: () => _onPublishPressed(context),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ),
         body: SafeArea(
           child: Column(
             children: [

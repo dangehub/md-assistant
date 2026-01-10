@@ -41,6 +41,19 @@ class _SettingsViewState extends State<SettingsView> {
   int _imageCompressionQuality = 75;
   String _imageCompressionFormat = 'webp';
 
+  // Microblog State
+  final _microblogFilenameController = TextEditingController();
+  final _microblogTitleController = TextEditingController();
+  final _microblogTagController = TextEditingController();
+  final _microblogAvatarPathController = TextEditingController();
+  final _microblogUsernameController = TextEditingController();
+  final _microblogRepoUrlController = TextEditingController();
+  final _microblogRepoTokenController = TextEditingController();
+  final _microblogRepoPathController = TextEditingController();
+  final _microblogRepoImagePathController = TextEditingController();
+  final _microblogWebImagePrefixController = TextEditingController();
+  final _microblogPermalinkController = TextEditingController();
+
   @override
   void initState() {
     _dateTemplateController.text = widget.controller.dateTemplate;
@@ -52,6 +65,7 @@ class _SettingsViewState extends State<SettingsView> {
     _memosPathController.text = widget.controller.memosPath ?? "";
     _loadMemosAttachmentDir();
     _loadImageCompressionSettings();
+    _loadMicroblogSettings();
 
     _dateTemplateController.addListener(() {
       widget.controller.updateDateTemplate(_dateTemplateController.text);
@@ -118,6 +132,28 @@ class _SettingsViewState extends State<SettingsView> {
     });
   }
 
+  Future<void> _loadMicroblogSettings() async {
+    final service = SettingsService();
+    _microblogFilenameController.text = await service.microblogFilename();
+    _microblogTitleController.text = await service.microblogTitle();
+    _microblogTagController.text = await service.microblogTag();
+    _microblogAvatarPathController.text = await service.microblogAvatarPath();
+    _microblogUsernameController.text = await service.microblogUsername();
+    _microblogRepoUrlController.text = await service.microblogRepoUrl();
+    _microblogRepoTokenController.text = await service.microblogRepoToken();
+    _microblogRepoPathController.text = await service.microblogRepoPath();
+    _microblogRepoImagePathController.text =
+        await service.microblogRepoImagePath();
+    _microblogWebImagePrefixController.text =
+        await service.microblogWebImagePrefix();
+    _microblogPermalinkController.text = await service.microblogPermalink();
+  }
+
+  Future<void> _saveMicroblogSetting(
+      Future<void> Function(String) saveFunc, String value) async {
+    await saveFunc(value);
+  }
+
   @override
   void dispose() {
     _tasksFileNameController.dispose();
@@ -128,6 +164,17 @@ class _SettingsViewState extends State<SettingsView> {
     _aiModelNameController.dispose();
     _memosPathController.dispose();
     _memosAttachmentDirController.dispose();
+    _microblogFilenameController.dispose();
+    _microblogTitleController.dispose();
+    _microblogTagController.dispose();
+    _microblogAvatarPathController.dispose();
+    _microblogRepoUrlController.dispose();
+    _microblogRepoTokenController.dispose();
+    _microblogRepoPathController.dispose();
+    _microblogRepoImagePathController.dispose();
+    _microblogWebImagePrefixController.dispose();
+    _microblogPermalinkController.dispose();
+
     widget.controller.removeListener(_onControllerChanged);
     super.dispose();
   }
@@ -436,6 +483,146 @@ class _SettingsViewState extends State<SettingsView> {
                       ),
                     ],
                   ])),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: ExpansionTile(
+              title: const Text("Microblog Publishing",
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              tilePadding: EdgeInsets.zero,
+              children: [
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _microblogFilenameController,
+                  decoration: const InputDecoration(
+                    labelText: "Filename (in Vault)",
+                    hintText: "function/microblog.md",
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (val) => _saveMicroblogSetting(
+                      SettingsService().updateMicroblogFilename, val),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _microblogTitleController,
+                  decoration: const InputDecoration(
+                    labelText: "Blog Title",
+                    hintText: "My Microblog",
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (val) => _saveMicroblogSetting(
+                      SettingsService().updateMicroblogTitle, val),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _microblogPermalinkController,
+                  decoration: const InputDecoration(
+                    labelText: "DG Permalink (Slug)",
+                    hintText: "microblog",
+                    helperText:
+                        "Permanent link suffix (e.g., mysite.com/microblog)",
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (val) => _saveMicroblogSetting(
+                      SettingsService().updateMicroblogPermalink, val),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _microblogTagController,
+                  decoration: const InputDecoration(
+                    labelText: "Filter Tag",
+                    hintText: "#mb",
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (val) => _saveMicroblogSetting(
+                      SettingsService().updateMicroblogTag, val),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _microblogAvatarPathController,
+                  decoration: const InputDecoration(
+                    labelText: "Avatar Path (in Vault)",
+                    hintText: "assets/avatar.png",
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (val) => _saveMicroblogSetting(
+                      SettingsService().updateMicroblogAvatarPath, val),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _microblogUsernameController,
+                  decoration: const InputDecoration(
+                    labelText: "Username",
+                    hintText: "Me",
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (val) => _saveMicroblogSetting(
+                      SettingsService().updateMicroblogUsername, val),
+                ),
+                const SizedBox(height: 20),
+                const Text("Push Configuration (GitHub)",
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _microblogRepoUrlController,
+                  decoration: const InputDecoration(
+                    labelText: "Repo URL",
+                    hintText: "https://github.com/user/repo.git",
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (val) => _saveMicroblogSetting(
+                      SettingsService().updateMicroblogRepoUrl, val),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _microblogRepoPathController,
+                  decoration: const InputDecoration(
+                    labelText: "Target Path in Repo",
+                    hintText: "src/site/notes/",
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (val) => _saveMicroblogSetting(
+                      SettingsService().updateMicroblogRepoPath, val),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _microblogRepoImagePathController,
+                  decoration: const InputDecoration(
+                    labelText: "Image Path in Repo",
+                    hintText: "src/site/img/user/microblog",
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (val) => _saveMicroblogSetting(
+                      SettingsService().updateMicroblogRepoImagePath, val),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _microblogWebImagePrefixController,
+                  decoration: const InputDecoration(
+                    labelText: "Web Image Prefix",
+                    hintText: "/img/user/microblog",
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (val) => _saveMicroblogSetting(
+                      SettingsService().updateMicroblogWebImagePrefix, val),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _microblogRepoTokenController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: "Personal Access Token",
+                    hintText: "github_pat_...",
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (val) => _saveMicroblogSetting(
+                      SettingsService().updateMicroblogRepoToken, val),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+
           Padding(
               padding: const EdgeInsets.all(16),
               child: Column(children: [
